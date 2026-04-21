@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-20T13:22:14+08:00
-last_updated: 2026-04-21T16:11:45+0800
+last_updated: 2026-04-21T16:29:18+0800
 project: knowledge
 project_key: NOKEY
 tracking_system: file-system
@@ -51,7 +51,7 @@ development_status:
   2-1-ingestion-pipeline-核心与-markdown-adapter: done
   2-2-入库时标签与备注支持: done
   2-3-入库进度与可观测性: done
-  2-4-入库错误处理与异常路径: backlog
+  2-4-入库错误处理与异常路径: ready-for-dev
   epic-2-retrospective: optional
   epic-3: backlog
   3-1-全文检索与结果展示-kb-search: backlog
