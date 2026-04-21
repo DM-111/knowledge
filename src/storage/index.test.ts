@@ -91,7 +91,8 @@ describe('storage ingestion', () => {
         source_path TEXT NOT NULL UNIQUE,
         content TEXT NOT NULL,
         word_count INTEGER NOT NULL,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        note TEXT
       );
 
       CREATE TABLE chunks (

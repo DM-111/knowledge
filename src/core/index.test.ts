@@ -10,9 +10,10 @@ describe('ensureStorageReady', () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all() as Array<{ name: string }>;
 
-    expect(provider.getUserVersion()).toBe(2);
+    expect(provider.getUserVersion()).toBe(3);
     expect(tables.map((table) => table.name)).toContain('knowledge_items');
     expect(tables.map((table) => table.name)).toContain('chunks');
+    expect(tables.map((table) => table.name)).toContain('tags');
 
     provider.close();
   });

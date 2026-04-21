@@ -4,6 +4,38 @@ import { KnowledgeItemRepository } from './knowledge-item-repository.js';
 import { ChunkRepository } from './chunk-repository.js';
 
 describe('storage repositories', () => {
+  it('支持在 knowledge_item 上写入可选备注', () => {
+    const provider = initializeStorage({ dbPath: ':memory:' });
+    const knowledgeItemRepository = new KnowledgeItemRepository(provider);
+
+    const knowledgeItemId = knowledgeItemRepository.create({
+      title: '带备注的文章',
+      sourceType: 'local-markdown',
+      sourcePath: '/tmp/noted-article.md',
+      content: '# 带备注的文章\n\n正文。',
+      wordCount: 8,
+      createdAt: '2026-04-21T00:00:00.000Z',
+      note: '关于泛型的总结',
+    });
+
+    const itemRow = provider
+      .getConnection()
+      .prepare('SELECT title, note FROM knowledge_items WHERE id = ?')
+      .get(knowledgeItemId) as
+      | {
+          title: string;
+          note: string | null;
+        }
+      | undefined;
+
+    expect(itemRow).toEqual({
+      title: '带备注的文章',
+      note: '关于泛型的总结',
+    });
+
+    provider.close();
+  });
+
   it('在同一事务中写入 knowledge_item、chunks 与 chunks_fts', () => {
     const provider = initializeStorage({ dbPath: ':memory:' });
     const knowledgeItemRepository = new KnowledgeItemRepository(provider);

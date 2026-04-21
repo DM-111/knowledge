@@ -8,6 +8,7 @@ export interface CreateKnowledgeItemInput {
   content: string;
   wordCount: number;
   createdAt: string;
+  note?: string;
 }
 
 export class KnowledgeItemRepository {
@@ -23,11 +24,20 @@ export class KnowledgeItemRepository {
             source_path,
             content,
             word_count,
-            created_at
-          ) VALUES (?, ?, ?, ?, ?, ?)
+            created_at,
+            note
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
       )
-      .run(input.title, input.sourceType, input.sourcePath, input.content, input.wordCount, input.createdAt);
+      .run(
+        input.title,
+        input.sourceType,
+        input.sourcePath,
+        input.content,
+        input.wordCount,
+        input.createdAt,
+        input.note ?? null,
+      );
 
     return Number(result.lastInsertRowid);
   }

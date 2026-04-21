@@ -117,6 +117,19 @@ If `{sprint_status}` file does not exist, note that story status was updated in 
 > **Deferred:** <W>
 > **Dismissed:** <R>
 
+### 6.5 Commit gate
+
+After presenting the completion summary, always pause and ask:
+
+> **Would you like to commit these reviewed changes now?**
+> 1. **Yes** — run the commit workflow for the current changes
+> 2. **No** — leave changes uncommitted and continue
+
+**HALT** — I am waiting for your choice. Do not proceed until the user selects an option.
+
+- If the user chooses **1**, tell them you will start the repository's commit workflow and gather a commit message as needed. Do not auto-commit silently.
+- If the user chooses **2**, continue to the next section without creating a commit.
+
 ### 7. Next steps
 
 Present the user with follow-up options:

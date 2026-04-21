@@ -55,7 +55,7 @@ describe('kb init integration', () => {
     const connection = new Database(dbPath, { readonly: true });
     const version = connection.prepare('PRAGMA user_version').get() as { user_version?: number } | undefined;
 
-    expect(version?.user_version).toBe(2);
+    expect(version?.user_version).toBe(3);
 
     connection.close();
   });

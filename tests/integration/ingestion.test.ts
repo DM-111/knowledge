@@ -71,4 +71,63 @@ describe('kb ingest integration', () => {
 
     connection.close();
   });
+
+  it('支持在入库时附加标签与备注', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-ingest-tags-'));
+    const dbPath = join(root, 'data', 'knowledge.db');
+    const knowledgeBasePath = join(root, 'kb');
+    cleanupPaths.push(root);
+
+    const fixturePath = resolve('tests/fixtures/sample-article.md');
+    const result = await execa(
+      'node',
+      [
+        '--import',
+        'tsx',
+        'src/cli/main.ts',
+        'ingest',
+        fixturePath,
+        '--tag',
+        'typescript, 学习笔记, typescript',
+        '--note',
+        '关于泛型的总结',
+        '--knowledge-base-path',
+        knowledgeBasePath,
+        '--db-path',
+        dbPath,
+      ],
+      {
+        cwd: process.cwd(),
+        reject: false,
+      },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('标签: typescript, 学习笔记');
+    expect(result.stdout).toContain('备注: 关于泛型的总结');
+
+    const connection = new Database(dbPath, { readonly: true });
+    const knowledgeItemRow = connection
+      .prepare('SELECT note FROM knowledge_items')
+      .get() as
+      | {
+          note: string | null;
+        }
+      | undefined;
+    const tagRows = connection
+      .prepare(
+        `
+          SELECT t.name
+          FROM item_tags it
+          JOIN tags t ON t.id = it.tag_id
+          ORDER BY t.id
+        `,
+      )
+      .all() as Array<{ name: string }>;
+
+    expect(knowledgeItemRow).toEqual({ note: '关于泛型的总结' });
+    expect(tagRows).toEqual([{ name: 'typescript' }, { name: '学习笔记' }]);
+
+    connection.close();
+  });
 });

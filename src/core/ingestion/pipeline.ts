@@ -4,6 +4,7 @@ import { IngestionError } from '../../errors/index.js';
 import {
   ChunkRepository,
   KnowledgeItemRepository,
+  TagRepository,
   initializeStorage,
   type DatabaseProvider,
 } from '../../storage/index.js';
@@ -14,6 +15,8 @@ import type { IngestOptions } from './adapter.js';
 export interface IngestSourceOptions extends IngestOptions {
   source: string;
   dbPath: string;
+  tags?: string[];
+  note?: string;
 }
 
 export async function ingestSource(options: IngestSourceOptions): Promise<IngestResult> {
@@ -113,6 +116,9 @@ export async function ingestSourceWithProvider(
 
   const knowledgeItemRepository = new KnowledgeItemRepository(provider);
   const chunkRepository = new ChunkRepository(provider);
+  const tagRepository = new TagRepository(provider);
+  const normalizedTags = normalizeTags(options.tags ?? []);
+  const normalizedNote = normalizeNote(options.note);
 
   options.onProgress?.({
     step: 'store',
@@ -129,11 +135,14 @@ export async function ingestSourceWithProvider(
         content: normalizedMarkdown,
         wordCount,
         createdAt: rawContent.createdAt,
+        note: normalizedNote,
       },
       db,
     );
 
     chunkRepository.createMany(itemId, toChunkInputs(chunkDrafts), db);
+    const tagIds = tagRepository.ensureTagIds(normalizedTags, db);
+    tagRepository.linkTagsToItem(itemId, tagIds, db);
     return itemId;
   });
 
@@ -161,6 +170,8 @@ export async function ingestSourceWithProvider(
     wordCount,
     chunkCount: chunkDrafts.length,
     knowledgeItemId,
+    tags: normalizedTags,
+    note: normalizedNote,
   };
 }
 
@@ -178,4 +189,13 @@ function toChunkInputs(chunkDrafts: readonly ChunkDraft[]) {
 function countWords(content: string): number {
   const compact = content.replace(/\s+/g, '');
   return compact.length;
+}
+
+function normalizeTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0))];
+}
+
+function normalizeNote(note?: string): string | undefined {
+  const trimmedNote = note?.trim();
+  return trimmedNote ? trimmedNote : undefined;
 }

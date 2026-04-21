@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ingestSource } from './pipeline.js';
 import type { ProgressEvent } from '../types.js';
+import Database from 'better-sqlite3';
 
 const cleanupPaths: string[] = [];
 
@@ -50,5 +51,47 @@ describe('ingest pipeline', () => {
       'index:start',
       'index:complete',
     ]);
+  });
+
+  it('在同一事务中写入备注、标签与 chunks', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-tags-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'article.md');
+    const dbPath = join(root, 'knowledge.db');
+    writeFileSync(source, '# 标题\n\n第一段内容。\n\n第二段内容。');
+
+    const result = await ingestSource({
+      source,
+      dbPath,
+      tags: ['typescript', '学习笔记', 'typescript'],
+      note: '关于泛型的总结',
+    });
+
+    const connection = new Database(dbPath, { readonly: true });
+    const itemRow = connection
+      .prepare('SELECT id, note FROM knowledge_items WHERE id = ?')
+      .get(result.knowledgeItemId) as { id: number; note: string | null } | undefined;
+    const tagRows = connection
+      .prepare(
+        `
+          SELECT t.name
+          FROM item_tags it
+          JOIN tags t ON t.id = it.tag_id
+          WHERE it.knowledge_item_id = ?
+          ORDER BY t.id
+        `,
+      )
+      .all(result.knowledgeItemId) as Array<{ name: string }>;
+
+    expect(result.tags).toEqual(['typescript', '学习笔记']);
+    expect(result.note).toBe('关于泛型的总结');
+    expect(itemRow).toEqual({
+      id: result.knowledgeItemId,
+      note: '关于泛型的总结',
+    });
+    expect(tagRows).toEqual([{ name: 'typescript' }, { name: '学习笔记' }]);
+
+    connection.close();
   });
 });

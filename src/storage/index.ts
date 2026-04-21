@@ -13,6 +13,7 @@ export {
   KnowledgeItemRepository,
   type CreateKnowledgeItemInput,
 } from './repositories/knowledge-item-repository.js';
+export { TagRepository } from './repositories/tag-repository.js';
 
 export interface InitializeStorageOptions {
   dbPath: string;

@@ -23,6 +23,7 @@ export interface KnowledgeItem {
   content: string;
   wordCount: number;
   createdAt: string;
+  note?: string;
 }
 
 export interface ChunkDraft {
@@ -52,4 +53,6 @@ export interface IngestResult {
   wordCount: number;
   chunkCount: number;
   knowledgeItemId: number;
+  tags: string[];
+  note?: string;
 }
