@@ -39,7 +39,7 @@ export function handleCliError(error: unknown): void {
 
   if (error instanceof KbError) {
     process.stderr.write(`${formatKbError(error)}\n`);
-    process.exitCode = 1;
+    process.exitCode = error.exitCode ?? 1;
     return;
   }
 

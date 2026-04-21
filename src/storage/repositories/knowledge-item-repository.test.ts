@@ -125,4 +125,34 @@ describe('storage repositories', () => {
 
     provider.close();
   });
+
+  it('支持按来源查询已有条目并删除旧记录', () => {
+    const provider = initializeStorage({ dbPath: ':memory:' });
+    const knowledgeItemRepository = new KnowledgeItemRepository(provider);
+
+    const knowledgeItemId = knowledgeItemRepository.create({
+      title: '重复来源文章',
+      sourceType: 'local-markdown',
+      sourcePath: '/tmp/article.md',
+      content: '# 重复来源文章\n\n正文。',
+      wordCount: 8,
+      createdAt: '2026-04-21T00:00:00.000Z',
+      note: '旧备注',
+    });
+
+    expect(knowledgeItemRepository.findBySource('local-markdown', '/tmp/article.md')).toEqual({
+      id: knowledgeItemId,
+      title: '重复来源文章',
+      sourceType: 'local-markdown',
+      sourcePath: '/tmp/article.md',
+      createdAt: '2026-04-21T00:00:00.000Z',
+      note: '旧备注',
+    });
+
+    knowledgeItemRepository.deleteById(knowledgeItemId);
+
+    expect(knowledgeItemRepository.findBySource('local-markdown', '/tmp/article.md')).toBeUndefined();
+
+    provider.close();
+  });
 });

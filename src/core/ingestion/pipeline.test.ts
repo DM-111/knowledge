@@ -146,7 +146,7 @@ describe('ingest pipeline', () => {
           events.push(event);
         },
       }),
-    ).rejects.toThrow('未找到可处理该来源的入库 adapter');
+    ).rejects.toThrow('不支持的文件类型 .txt');
 
     expect(events.map((event) => `${event.step}:${event.status}`)).toEqual([
       'resolve-adapter:start',
@@ -170,7 +170,7 @@ describe('ingest pipeline', () => {
           events.push(event);
         },
       }),
-    ).rejects.toThrow('读取来源内容失败');
+    ).rejects.toThrow('文件不存在，无法读取来源内容');
 
     expect(events.map((event) => `${event.step}:${event.status}`)).toEqual([
       'resolve-adapter:start',
@@ -178,6 +178,31 @@ describe('ingest pipeline', () => {
       'fetch:start',
       'fetch:error',
     ]);
+  });
+
+  it('文件不存在时抛出稳定的 fetch 错误上下文', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-file-missing-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'missing.md');
+    const dbPath = join(root, 'knowledge.db');
+
+    try {
+      await ingestSource({
+        source,
+        dbPath,
+      });
+      throw new Error('expected ingestSource to fail');
+    } catch (error) {
+      expect(error).toMatchObject({
+        name: 'IngestionError',
+        message: '文件不存在，无法读取来源内容',
+        step: 'fetch',
+        source,
+      });
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).cause).toBeInstanceOf(Error);
+    }
   });
 
   it('chunker 直接抛错时会先发送 chunk:error 事件再抛错', async () => {
@@ -213,8 +238,99 @@ describe('ingest pipeline', () => {
       'chunk:start',
       'chunk:error',
     ]);
+    expect(events.some((event) => event.step === 'store')).toBe(false);
+    expect(events.some((event) => event.step === 'index')).toBe(false);
 
     chunkerSpy.mockRestore();
+  });
+
+  it('重复来源在 replace 策略下会原子替换旧记录及其关联数据', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-replace-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'article.md');
+    const dbPath = join(root, 'knowledge.db');
+    writeFileSync(source, '# 旧标题\n\n旧内容。');
+
+    const first = await ingestSource({
+      source,
+      dbPath,
+      tags: ['old-tag'],
+      note: '旧备注',
+    });
+
+    writeFileSync(source, '# 新标题\n\n新内容第一段。\n\n新内容第二段。');
+    const second = await ingestSource({
+      source,
+      dbPath,
+      tags: ['new-tag'],
+      note: '新备注',
+      duplicateStrategy: 'replace',
+    });
+
+    const connection = new Database(dbPath, { readonly: true });
+    const itemRows = connection.prepare('SELECT id, title, note FROM knowledge_items ORDER BY id').all() as Array<{
+      id: number;
+      title: string;
+      note: string | null;
+    }>;
+    const tagRows = connection
+      .prepare(
+        `
+          SELECT t.name
+          FROM item_tags it
+          JOIN tags t ON t.id = it.tag_id
+          WHERE it.knowledge_item_id = ?
+          ORDER BY t.id
+        `,
+      )
+      .all(second.knowledgeItemId) as Array<{ name: string }>;
+    const chunkCount = connection
+      .prepare('SELECT COUNT(*) AS count FROM chunks WHERE knowledge_item_id = ?')
+      .get(second.knowledgeItemId) as { count: number };
+    const staleChunkCount = connection
+      .prepare('SELECT COUNT(*) AS count FROM chunks WHERE knowledge_item_id = ?')
+      .get(first.knowledgeItemId) as { count: number };
+
+    expect(itemRows).toEqual([
+      {
+        id: second.knowledgeItemId,
+        title: '新标题',
+        note: '新备注',
+      },
+    ]);
+    expect(tagRows).toEqual([{ name: 'new-tag' }]);
+    expect(chunkCount.count).toBeGreaterThan(0);
+    expect(staleChunkCount.count).toBe(0);
+
+    connection.close();
+  });
+
+  it('重复来源在 skip 策略下返回稳定错误，供 CLI 收敛为确定性跳过', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-skip-duplicate-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'article.md');
+    const dbPath = join(root, 'knowledge.db');
+    writeFileSync(source, '# 标题\n\n正文。');
+
+    await ingestSource({
+      source,
+      dbPath,
+    });
+
+    await expect(
+      ingestSource({
+        source,
+        dbPath,
+        duplicateStrategy: 'skip',
+      }),
+    ).rejects.toMatchObject({
+      name: 'IngestionError',
+      message: '检测到重复来源，已按策略跳过入库',
+      step: 'store',
+      source,
+    });
   });
 
   it('持久化失败时会先发送 store:error 事件再抛错', async () => {

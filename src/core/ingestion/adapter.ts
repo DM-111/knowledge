@@ -2,6 +2,7 @@ import type { ProgressEvent, RawContent, SourceType } from '../types.js';
 
 export interface IngestOptions {
   onProgress?: (event: ProgressEvent) => void;
+  signal?: AbortSignal;
 }
 
 export interface IngestionAdapter {

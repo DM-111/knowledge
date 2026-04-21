@@ -3,7 +3,8 @@ import { basename, extname } from 'node:path';
 import type { IngestionAdapter, IngestOptions } from '../core/ingestion/adapter.js';
 import type { RawContent } from '../core/types.js';
 
-const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdx']);
+export const SUPPORTED_MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdx'] as const;
+const MARKDOWN_EXTENSIONS = new Set<string>(SUPPORTED_MARKDOWN_EXTENSIONS);
 
 export class MarkdownAdapter implements IngestionAdapter {
   readonly sourceType = 'local-markdown' as const;
@@ -12,8 +13,11 @@ export class MarkdownAdapter implements IngestionAdapter {
     return MARKDOWN_EXTENSIONS.has(extname(source).toLowerCase());
   }
 
-  async ingest(source: string, _options?: IngestOptions): Promise<RawContent> {
-    const content = await readFile(source, 'utf8');
+  async ingest(source: string, options?: IngestOptions): Promise<RawContent> {
+    const content = await readFile(source, {
+      encoding: 'utf8',
+      signal: options?.signal,
+    });
 
     return {
       title: extractTitle(content, source),

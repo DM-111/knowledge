@@ -17,6 +17,7 @@ export interface IngestSourceOptions extends IngestOptions {
   dbPath: string;
   tags?: string[];
   note?: string;
+  duplicateStrategy?: 'error' | 'replace' | 'skip';
 }
 
 export async function ingestSource(options: IngestSourceOptions): Promise<IngestResult> {
@@ -33,6 +34,8 @@ export async function ingestSourceWithProvider(
   provider: DatabaseProvider,
   options: IngestSourceOptions,
 ): Promise<IngestResult> {
+  throwIfAborted(options);
+
   emitProgress(options, {
     step: 'resolve-adapter',
     status: 'start',
@@ -53,6 +56,7 @@ export async function ingestSourceWithProvider(
     status: 'complete',
     detail: `已选择 ${adapter.sourceType} adapter`,
   });
+  throwIfAborted(options);
 
   emitProgress(options, {
     step: 'fetch',
@@ -65,11 +69,7 @@ export async function ingestSourceWithProvider(
   try {
     rawContent = await adapter.ingest(options.source, options);
   } catch (error) {
-    const ingestionError = new IngestionError('读取来源内容失败', {
-      step: 'fetch',
-      source: options.source,
-      cause: error,
-    });
+    const ingestionError = mapFetchError(options.source, error);
     emitStepError(options, 'fetch', '读取文件失败', ingestionError);
     throw ingestionError;
   }
@@ -79,6 +79,7 @@ export async function ingestSourceWithProvider(
     status: 'complete',
     detail: `已读取 ${options.source}`,
   });
+  throwIfAborted(options);
 
   emitProgress(options, {
     step: 'parse',
@@ -103,6 +104,7 @@ export async function ingestSourceWithProvider(
     status: 'complete',
     detail: `已提取标题 ${rawContent.title}`,
   });
+  throwIfAborted(options);
 
   emitProgress(options, {
     step: 'chunk',
@@ -140,6 +142,7 @@ export async function ingestSourceWithProvider(
     status: 'complete',
     detail: `已生成 ${chunkDrafts.length} 个 chunk`,
   });
+  throwIfAborted(options);
 
   const knowledgeItemRepository = new KnowledgeItemRepository(provider);
   const chunkRepository = new ChunkRepository(provider);
@@ -157,6 +160,25 @@ export async function ingestSourceWithProvider(
 
   try {
     knowledgeItemId = provider.transaction((db) => {
+      throwIfAborted(options);
+      const existingItem = knowledgeItemRepository.findBySource(rawContent.sourceType, rawContent.sourcePath, db);
+
+      if (existingItem) {
+        if (options.duplicateStrategy === 'replace') {
+          knowledgeItemRepository.deleteById(existingItem.id, db);
+        } else if (options.duplicateStrategy === 'skip') {
+          throw new IngestionError('检测到重复来源，已按策略跳过入库', {
+            step: 'store',
+            source: rawContent.sourcePath,
+          });
+        } else {
+          throw new IngestionError('该来源已入库，请选择覆盖更新或跳过', {
+            step: 'store',
+            source: rawContent.sourcePath,
+          });
+        }
+      }
+
       const itemId = knowledgeItemRepository.create(
         {
           title: rawContent.title,
@@ -185,6 +207,7 @@ export async function ingestSourceWithProvider(
     status: 'complete',
     detail: `已写入 knowledge item ${knowledgeItemId}`,
   });
+  throwIfAborted(options);
 
   emitProgress(options, {
     step: 'index',
@@ -232,6 +255,62 @@ function normalizeTags(tags: readonly string[]): string[] {
 function normalizeNote(note?: string): string | undefined {
   const trimmedNote = note?.trim();
   return trimmedNote ? trimmedNote : undefined;
+}
+
+function throwIfAborted(options: IngestSourceOptions): void {
+  if (!options.signal?.aborted) {
+    return;
+  }
+
+  throw new IngestionError('入库已取消', {
+    step: 'interrupt',
+    source: options.source,
+    cause: toAbortCause(options.signal.reason),
+  });
+}
+
+function mapFetchError(source: string, error: unknown): IngestionError {
+  if (isAbortError(error)) {
+    return new IngestionError('入库已取消', {
+      step: 'interrupt',
+      source,
+      cause: error,
+    });
+  }
+
+  if (isFileNotFoundError(error)) {
+    return new IngestionError('文件不存在，无法读取来源内容', {
+      step: 'fetch',
+      source,
+      cause: error,
+    });
+  }
+
+  return new IngestionError('读取来源内容失败', {
+    step: 'fetch',
+    source,
+    cause: error,
+  });
+}
+
+function isFileNotFoundError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function toAbortCause(reason: unknown): Error | undefined {
+  if (reason instanceof Error) {
+    return reason;
+  }
+
+  if (typeof reason === 'string' && reason.length > 0) {
+    return new Error(reason);
+  }
+
+  return undefined;
 }
 
 function emitProgress(options: IngestSourceOptions, event: Parameters<NonNullable<IngestSourceOptions['onProgress']>>[0]): void {

@@ -12,6 +12,7 @@ export {
 export {
   KnowledgeItemRepository,
   type CreateKnowledgeItemInput,
+  type KnowledgeItemSummary,
 } from './repositories/knowledge-item-repository.js';
 export { TagRepository } from './repositories/tag-repository.js';
 

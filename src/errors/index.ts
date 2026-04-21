@@ -2,17 +2,20 @@ export interface KbErrorOptions {
   step?: string;
   source?: string;
   cause?: unknown;
+  exitCode?: number;
 }
 
 export class KbError extends Error {
   readonly step?: string;
   readonly source?: string;
+  readonly exitCode?: number;
 
   constructor(message: string, options: KbErrorOptions = {}) {
     super(message, { cause: options.cause });
     this.name = 'KbError';
     this.step = options.step;
     this.source = options.source;
+    this.exitCode = options.exitCode;
   }
 }
 
