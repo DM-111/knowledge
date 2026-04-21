@@ -1,0 +1,76 @@
+# generated: 2026-04-20T13:22:14+08:00
+# last_updated: 2026-04-20T13:22:14+08:00
+# project: knowledge
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-04-20T13:22:14+08:00
+last_updated: 2026-04-21T08:07:29+0800
+project: knowledge
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-cli-骨架与项目基础设施: done
+  1-2-数据库迁移引擎与最小初始化: done
+  1-3-分层配置系统与-kb-init-命令: done
+  epic-1-retrospective: optional
+  epic-2: in-progress
+  2-1-ingestion-pipeline-核心与-markdown-adapter: review
+  2-2-入库时标签与备注支持: backlog
+  2-3-入库进度与可观测性: backlog
+  2-4-入库错误处理与异常路径: backlog
+  epic-2-retrospective: optional
+  epic-3: backlog
+  3-1-全文检索与结果展示-kb-search: backlog
+  3-2-检索过滤与知识条目列表-kb-list: backlog
+  3-3-输出格式化策略-tty-非-tty-json: backlog
+  epic-3-retrospective: optional
+  epic-4: backlog
+  4-1-web-adapter-与网页正文提取: backlog
+  4-2-网页入库异常处理: backlog
+  epic-4-retrospective: optional
+  epic-5: backlog
+  5-1-标签管理-kb-tag: backlog
+  5-2-shell-自动补全: backlog
+  epic-5-retrospective: optional
+  epic-6: backlog
+  6-1-混合召回驱动的-rag-问答-kb-ask: backlog
+  6-2-结论回写沉淀-kb-write-back: backlog
+  epic-6-retrospective: optional
+  epic-7: backlog
+  7-1-agent-自动归档建议-kb-organize-auto: backlog
+  7-2-入库时-agent-自动生成标签与描述: backlog
+  epic-7-retrospective: optional
