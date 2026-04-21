@@ -33,19 +33,28 @@ export async function ingestSourceWithProvider(
   provider: DatabaseProvider,
   options: IngestSourceOptions,
 ): Promise<IngestResult> {
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'resolve-adapter',
     status: 'start',
     detail: `为 ${options.source} 选择 adapter`,
   });
-  const adapter = resolveIngestionAdapter(options.source);
-  options.onProgress?.({
+
+  let adapter: ReturnType<typeof resolveIngestionAdapter>;
+
+  try {
+    adapter = resolveIngestionAdapter(options.source);
+  } catch (error) {
+    emitStepError(options, 'resolve-adapter', '选择适配器失败', error);
+    throw error;
+  }
+
+  emitProgress(options, {
     step: 'resolve-adapter',
     status: 'complete',
     detail: `已选择 ${adapter.sourceType} adapter`,
   });
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'fetch',
     status: 'start',
     detail: `读取 ${options.source}`,
@@ -56,20 +65,22 @@ export async function ingestSourceWithProvider(
   try {
     rawContent = await adapter.ingest(options.source, options);
   } catch (error) {
-    throw new IngestionError('读取来源内容失败', {
+    const ingestionError = new IngestionError('读取来源内容失败', {
       step: 'fetch',
       source: options.source,
       cause: error,
     });
+    emitStepError(options, 'fetch', '读取文件失败', ingestionError);
+    throw ingestionError;
   }
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'fetch',
     status: 'complete',
     detail: `已读取 ${options.source}`,
   });
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'parse',
     status: 'start',
     detail: '解析与标准化 Markdown 内容',
@@ -77,38 +88,54 @@ export async function ingestSourceWithProvider(
 
   const normalizedMarkdown = rawContent.markdown.trim();
   if (!normalizedMarkdown) {
-    throw new IngestionError('Markdown 内容为空，无法入库', {
+    const ingestionError = new IngestionError('Markdown 内容为空，无法入库', {
       step: 'parse',
       source: options.source,
     });
+    emitStepError(options, 'parse', '内容清洗失败', ingestionError);
+    throw ingestionError;
   }
 
   const wordCount = countWords(normalizedMarkdown);
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'parse',
     status: 'complete',
     detail: `已提取标题 ${rawContent.title}`,
   });
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'chunk',
     status: 'start',
     detail: '按标题与段落切分内容',
   });
 
-  const chunkDrafts = chunkMarkdownContent(normalizedMarkdown, {
-    overlapParagraphs: 1,
-  });
+  let chunkDrafts: ChunkDraft[];
+
+  try {
+    chunkDrafts = chunkMarkdownContent(normalizedMarkdown, {
+      overlapParagraphs: 1,
+    });
+  } catch (error) {
+    const ingestionError = new IngestionError('切分 Markdown 内容失败', {
+      step: 'chunk',
+      source: options.source,
+      cause: error,
+    });
+    emitStepError(options, 'chunk', '切分 chunks 失败', ingestionError);
+    throw ingestionError;
+  }
 
   if (chunkDrafts.length === 0) {
-    throw new IngestionError('未生成任何 chunk，无法完成入库', {
+    const ingestionError = new IngestionError('未生成任何 chunk，无法完成入库', {
       step: 'chunk',
       source: options.source,
     });
+    emitStepError(options, 'chunk', '切分 chunks 失败', ingestionError);
+    throw ingestionError;
   }
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'chunk',
     status: 'complete',
     detail: `已生成 ${chunkDrafts.length} 个 chunk`,
@@ -120,45 +147,52 @@ export async function ingestSourceWithProvider(
   const normalizedTags = normalizeTags(options.tags ?? []);
   const normalizedNote = normalizeNote(options.note);
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'store',
     status: 'start',
     detail: '写入 knowledge_items 与 chunks',
   });
 
-  const knowledgeItemId = provider.transaction((db) => {
-    const itemId = knowledgeItemRepository.create(
-      {
-        title: rawContent.title,
-        sourceType: rawContent.sourceType,
-        sourcePath: rawContent.sourcePath,
-        content: normalizedMarkdown,
-        wordCount,
-        createdAt: rawContent.createdAt,
-        note: normalizedNote,
-      },
-      db,
-    );
+  let knowledgeItemId: number;
 
-    chunkRepository.createMany(itemId, toChunkInputs(chunkDrafts), db);
-    const tagIds = tagRepository.ensureTagIds(normalizedTags, db);
-    tagRepository.linkTagsToItem(itemId, tagIds, db);
-    return itemId;
-  });
+  try {
+    knowledgeItemId = provider.transaction((db) => {
+      const itemId = knowledgeItemRepository.create(
+        {
+          title: rawContent.title,
+          sourceType: rawContent.sourceType,
+          sourcePath: rawContent.sourcePath,
+          content: normalizedMarkdown,
+          wordCount,
+          createdAt: rawContent.createdAt,
+          note: normalizedNote,
+        },
+        db,
+      );
 
-  options.onProgress?.({
+      chunkRepository.createMany(itemId, toChunkInputs(chunkDrafts), db);
+      const tagIds = tagRepository.ensureTagIds(normalizedTags, db);
+      tagRepository.linkTagsToItem(itemId, tagIds, db);
+      return itemId;
+    });
+  } catch (error) {
+    emitStepError(options, 'store', '存储入库失败', error);
+    throw error;
+  }
+
+  emitProgress(options, {
     step: 'store',
     status: 'complete',
     detail: `已写入 knowledge item ${knowledgeItemId}`,
   });
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'index',
     status: 'start',
     detail: `准备同步 ${chunkDrafts.length} 个 chunk 到 FTS`,
   });
 
-  options.onProgress?.({
+  emitProgress(options, {
     step: 'index',
     status: 'complete',
     detail: `FTS 触发器已同步 ${chunkDrafts.length} 个 chunk`,
@@ -198,4 +232,22 @@ function normalizeTags(tags: readonly string[]): string[] {
 function normalizeNote(note?: string): string | undefined {
   const trimmedNote = note?.trim();
   return trimmedNote ? trimmedNote : undefined;
+}
+
+function emitProgress(options: IngestSourceOptions, event: Parameters<NonNullable<IngestSourceOptions['onProgress']>>[0]): void {
+  options.onProgress?.(event);
+}
+
+function emitStepError(
+  options: IngestSourceOptions,
+  step: Parameters<NonNullable<IngestSourceOptions['onProgress']>>[0]['step'],
+  detail: string,
+  error: unknown,
+): void {
+  emitProgress(options, {
+    step,
+    status: 'error',
+    detail,
+    metadata: error instanceof Error ? { errorName: error.name, message: error.message } : undefined,
+  });
 }

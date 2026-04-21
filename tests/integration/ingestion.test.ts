@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { execa } from 'execa';
+import { runIngestCommand } from '../../src/cli/commands/ingest.js';
 
 const cleanupPaths: string[] = [];
 
@@ -47,6 +48,7 @@ describe('kb ingest integration', () => {
     expect(result.stdout).toContain('标题: TypeScript 泛型入门');
     expect(result.stdout).toContain(`来源: ${fixturePath}`);
     expect(result.stdout).toContain('切分块数:');
+    expect(result.stdout).not.toContain('读取文件');
 
     const connection = new Database(dbPath, { readonly: true });
     const knowledgeItemRow = connection
@@ -70,6 +72,39 @@ describe('kb ingest integration', () => {
     expect(ftsCountRow.count).toBe(chunkCountRow.count);
 
     connection.close();
+  });
+
+  it('TTY 场景下输出过程进度并保留最终摘要', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-ingest-tty-'));
+    const dbPath = join(root, 'data', 'knowledge.db');
+    cleanupPaths.push(root);
+
+    const fixturePath = resolve('tests/fixtures/sample-article.md');
+    const chunks: string[] = [];
+
+    await runIngestCommand(fixturePath, {}, {
+      ensureConfig: async () => ({
+        knowledgeBasePath: join(root, 'kb'),
+        dbPath,
+      }),
+      io: {
+        stdinIsTTY: true,
+        stdoutIsTTY: true,
+        writer: {
+          write(chunk: string) {
+            chunks.push(chunk);
+          },
+        },
+      },
+    });
+
+    const output = stripTerminalControl(chunks.join(''));
+    expect(output).toContain('读取文件');
+    expect(output).toContain('内容清洗');
+    expect(output).toContain('切分 chunks');
+    expect(output).toContain('存储入库');
+    expect(output).toContain('更新索引');
+    expect(output).toContain('标题: TypeScript 泛型入门');
   });
 
   it('支持在入库时附加标签与备注', async () => {
@@ -131,3 +166,7 @@ describe('kb ingest integration', () => {
     connection.close();
   });
 });
+
+function stripTerminalControl(value: string): string {
+  return value.replace(/\u001B\[[0-9;]*[A-Za-z]/g, '');
+}

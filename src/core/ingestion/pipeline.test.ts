@@ -1,10 +1,13 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { ingestSource } from './pipeline.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ingestSource, ingestSourceWithProvider } from './pipeline.js';
 import type { ProgressEvent } from '../types.js';
 import Database from 'better-sqlite3';
+import type { DatabaseProvider } from '../../storage/index.js';
+import { StorageError } from '../../errors/index.js';
+import * as chunkerModule from './chunker.js';
 
 const cleanupPaths: string[] = [];
 
@@ -94,4 +97,182 @@ describe('ingest pipeline', () => {
 
     connection.close();
   });
+
+  it('内容清洗失败时会先发送 parse:error 事件再抛错', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-parse-error-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'empty.md');
+    const dbPath = join(root, 'knowledge.db');
+    writeFileSync(source, '   ');
+
+    const events: ProgressEvent[] = [];
+
+    await expect(
+      ingestSource({
+        source,
+        dbPath,
+        onProgress: (event) => {
+          events.push(event);
+        },
+      }),
+    ).rejects.toThrow('Markdown 内容为空');
+
+    expect(events.map((event) => `${event.step}:${event.status}`)).toEqual([
+      'resolve-adapter:start',
+      'resolve-adapter:complete',
+      'fetch:start',
+      'fetch:complete',
+      'parse:start',
+      'parse:error',
+    ]);
+  });
+
+  it('未找到可处理 adapter 时会先发送 resolve-adapter:error 事件再抛错', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-adapter-error-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'article.txt');
+    const dbPath = join(root, 'knowledge.db');
+    writeFileSync(source, 'plain text');
+
+    const events: ProgressEvent[] = [];
+
+    await expect(
+      ingestSource({
+        source,
+        dbPath,
+        onProgress: (event) => {
+          events.push(event);
+        },
+      }),
+    ).rejects.toThrow('未找到可处理该来源的入库 adapter');
+
+    expect(events.map((event) => `${event.step}:${event.status}`)).toEqual([
+      'resolve-adapter:start',
+      'resolve-adapter:error',
+    ]);
+  });
+
+  it('读取来源失败时会先发送 fetch:error 事件再抛错', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-fetch-error-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'missing.md');
+    const dbPath = join(root, 'knowledge.db');
+    const events: ProgressEvent[] = [];
+
+    await expect(
+      ingestSource({
+        source,
+        dbPath,
+        onProgress: (event) => {
+          events.push(event);
+        },
+      }),
+    ).rejects.toThrow('读取来源内容失败');
+
+    expect(events.map((event) => `${event.step}:${event.status}`)).toEqual([
+      'resolve-adapter:start',
+      'resolve-adapter:complete',
+      'fetch:start',
+      'fetch:error',
+    ]);
+  });
+
+  it('chunker 直接抛错时会先发送 chunk:error 事件再抛错', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-chunk-error-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'article.md');
+    const dbPath = join(root, 'knowledge.db');
+    writeFileSync(source, '# 标题\n\n第一段内容。');
+
+    const events: ProgressEvent[] = [];
+    const chunkerSpy = vi.spyOn(chunkerModule, 'chunkMarkdownContent').mockImplementation(() => {
+      throw new Error('chunker crashed');
+    });
+
+    await expect(
+      ingestSource({
+        source,
+        dbPath,
+        onProgress: (event) => {
+          events.push(event);
+        },
+      }),
+    ).rejects.toThrow('切分 Markdown 内容失败');
+
+    expect(events.map((event) => `${event.step}:${event.status}`)).toEqual([
+      'resolve-adapter:start',
+      'resolve-adapter:complete',
+      'fetch:start',
+      'fetch:complete',
+      'parse:start',
+      'parse:complete',
+      'chunk:start',
+      'chunk:error',
+    ]);
+
+    chunkerSpy.mockRestore();
+  });
+
+  it('持久化失败时会先发送 store:error 事件再抛错', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-store-error-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'article.md');
+    writeFileSync(source, '# 标题\n\n第一段内容。');
+
+    const events: ProgressEvent[] = [];
+
+    await expect(
+      ingestSourceWithProvider(createFailingProvider(), {
+        source,
+        dbPath: ':memory:',
+        onProgress: (event) => {
+          events.push(event);
+        },
+      }),
+    ).rejects.toThrow('写入数据库失败');
+
+    expect(events.map((event) => `${event.step}:${event.status}`)).toContain('store:error');
+  });
+
+  it('未注入 onProgress 时保持静默并成功入库', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-pipeline-silent-'));
+    cleanupPaths.push(root);
+
+    const source = join(root, 'article.md');
+    const dbPath = join(root, 'knowledge.db');
+    writeFileSync(source, '# 标题\n\n第一段内容。');
+
+    const result = await ingestSource({
+      source,
+      dbPath,
+    });
+
+    expect(result.title).toBe('标题');
+    expect(result.chunkCount).toBeGreaterThan(0);
+  });
 });
+
+function createFailingProvider(): DatabaseProvider {
+  return {
+    dbPath: ':memory:',
+    getConnection() {
+      throw new Error('not used');
+    },
+    transaction() {
+      throw new StorageError('写入数据库失败', {
+        step: 'store',
+        source: ':memory:',
+      });
+    },
+    getUserVersion() {
+      return 0;
+    },
+    setUserVersion() {},
+    close() {},
+  };
+}
