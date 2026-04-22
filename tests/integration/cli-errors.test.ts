@@ -25,13 +25,38 @@ describe('cli errors', () => {
     expect(`${result.stdout}\n${result.stderr}`).toContain('help');
   });
 
-  it('formats KbError failures from placeholder commands after config preflight', async () => {
-    const homeDir = createTempPath('cli-errors-home');
+  it('list 命令传入非法日期时退出码为 1 并报告 SearchError', async () => {
+    const homeDir = createTempPath('cli-errors-baddate-home');
     const configDir = join(homeDir, '.config', 'kb');
+    const dbDir = createTempPath('cli-errors-baddate-db');
     mkdirSync(configDir, { recursive: true });
     writeFileSync(
       join(configDir, 'config.yaml'),
-      ['knowledgeBasePath: "/tmp/kb"', 'dbPath: "/tmp/kb/knowledge.db"', ''].join('\n'),
+      [`knowledgeBasePath: "${dbDir}"`, `dbPath: "${join(dbDir, 'knowledge.db')}"`, ''].join('\n'),
+    );
+
+    const result = await execa(
+      'node',
+      ['--import', 'tsx', 'src/cli/main.ts', 'list', '--after', 'not-a-date'],
+      {
+        cwd: process.cwd(),
+        env: { HOME: homeDir },
+        reject: false,
+      },
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('SearchError');
+  });
+
+  it('list 命令在配置就绪且库为空时返回稳定结果', async () => {
+    const homeDir = createTempPath('cli-errors-home');
+    const configDir = join(homeDir, '.config', 'kb');
+    const dbDir = createTempPath('cli-errors-db');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      join(configDir, 'config.yaml'),
+      [`knowledgeBasePath: "${dbDir}"`, `dbPath: "${join(dbDir, 'knowledge.db')}"`, ''].join('\n'),
     );
 
     const result = await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'list'], {
@@ -42,10 +67,9 @@ describe('cli errors', () => {
       reject: false,
     });
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('SearchError');
-    expect(result.stderr).toContain('step: command');
-    expect(result.stderr).toContain('list');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('未找到匹配条目');
+    expect(result.stdout).toContain('共 0 条，当前展示 0 条');
   });
 });
 

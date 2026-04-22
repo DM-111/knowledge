@@ -8,8 +8,33 @@ export interface SearchHit {
   hitSnippet: string;
 }
 
-export interface SearchByKeywordOptions {
+export interface SearchFilterOptions {
+  tag?: string;
+  source?: string;
+  after?: string;
+  before?: string;
+}
+
+export interface SearchByKeywordOptions extends SearchFilterOptions {
   query: string;
   limit: number;
   dbPath: string;
+}
+
+export interface ListKnowledgeItemsOptions extends SearchFilterOptions {
+  dbPath: string;
+  limit?: number;
+}
+
+export interface KnowledgeListItem {
+  id: number;
+  title: string;
+  sourceType: string;
+  tags: string[];
+  createdAt: string;
+}
+
+export interface ListKnowledgeItemsResult {
+  items: KnowledgeListItem[];
+  total: number;
 }

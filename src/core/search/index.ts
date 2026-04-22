@@ -1,7 +1,14 @@
 import { SearchError } from '../../errors/index.js';
-import { SearchRepository, type SearchRow, initializeStorage } from '../../storage/index.js';
+import {
+  KnowledgeItemRepository,
+  SearchRepository,
+  TagRepository,
+  type SearchRow,
+  initializeStorage,
+} from '../../storage/index.js';
+import { normalizeSearchFilters } from './filters.js';
 import { buildFtsMatchQuery } from './fts-match.js';
-import type { SearchByKeywordOptions, SearchHit } from './types.js';
+import type { KnowledgeListItem, ListKnowledgeItemsOptions, ListKnowledgeItemsResult, SearchByKeywordOptions, SearchHit } from './types.js';
 
 function mapRowToHit(row: SearchRow): SearchHit {
   return {
@@ -34,10 +41,17 @@ export function searchByKeyword(options: SearchByKeywordOptions): SearchHit[] {
   }
 
   const matchString = buildFtsMatchQuery(query);
+  const filters = normalizeSearchFilters(options, 'searchByKeyword');
   const provider = initializeStorage({ dbPath });
   try {
     const repo = new SearchRepository(provider);
-    const rows = repo.searchByFtsQuery(matchString, limit);
+    const rows = repo.searchByFtsQuery(matchString, {
+      limit,
+      tag: filters.tag,
+      source: filters.source,
+      createdAfter: filters.createdAfter,
+      createdBefore: filters.createdBefore,
+    });
     return rows.map(mapRowToHit);
   } catch (error) {
     if (error instanceof SearchError) {
@@ -56,5 +70,56 @@ export function searchByKeyword(options: SearchByKeywordOptions): SearchHit[] {
   }
 }
 
+export function listKnowledgeItems(options: ListKnowledgeItemsOptions): ListKnowledgeItemsResult {
+  const { dbPath, limit } = options;
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+    throw new SearchError('limit 必须为正整数', {
+      step: 'list',
+      source: 'listKnowledgeItems',
+    });
+  }
+
+  const filters = normalizeSearchFilters(options, 'listKnowledgeItems');
+  const provider = initializeStorage({ dbPath });
+  try {
+    const knowledgeItemRepository = new KnowledgeItemRepository(provider);
+    const tagRepository = new TagRepository(provider);
+    const rows = knowledgeItemRepository.list({
+      limit,
+      tag: filters.tag,
+      source: filters.source,
+      createdAfter: filters.createdAfter,
+      createdBefore: filters.createdBefore,
+    });
+    const total = knowledgeItemRepository.count({
+      tag: filters.tag,
+      source: filters.source,
+      createdAfter: filters.createdAfter,
+      createdBefore: filters.createdBefore,
+    });
+    const tagsByItemId = tagRepository.listTagsByKnowledgeItemIds(rows.map((row) => row.id));
+
+    return {
+      items: rows.map((row): KnowledgeListItem => ({
+        id: row.id,
+        title: row.title,
+        sourceType: row.sourceType,
+        tags: tagsByItemId.get(row.id) ?? [],
+        createdAt: row.createdAt,
+      })),
+      total,
+    };
+  } finally {
+    provider.close();
+  }
+}
+
 export { buildFtsMatchQuery } from './fts-match.js';
-export type { SearchByKeywordOptions, SearchHit } from './types.js';
+export type {
+  SearchByKeywordOptions,
+  SearchHit,
+  SearchFilterOptions,
+  ListKnowledgeItemsOptions,
+  KnowledgeListItem,
+  ListKnowledgeItemsResult,
+} from './types.js';

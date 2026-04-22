@@ -51,7 +51,22 @@ describe('runSearchCommand', () => {
     };
     const search = vi.fn((): ReturnType<typeof searchByKeyword> => [hit]);
 
-    await runSearchCommand('词', { limit: '5' } as { limit: string }, {
+    await runSearchCommand(
+      '词',
+      {
+        limit: '5',
+        tag: 'typescript',
+        source: 'local-markdown',
+        after: '2026-04-01',
+        before: '2026-04-30',
+      } as {
+        limit: string;
+        tag: string;
+        source: string;
+        after: string;
+        before: string;
+      },
+      {
       ensureConfig: async () => ({
         knowledgeBasePath: '/tmp/kb',
         dbPath: '/tmp/x.db',
@@ -60,9 +75,18 @@ describe('runSearchCommand', () => {
       writeOut: (c) => {
         out.push(c);
       },
-    });
+    },
+    );
 
-    expect(search).toHaveBeenCalledWith({ query: '词', limit: 5, dbPath: '/tmp/x.db' });
+    expect(search).toHaveBeenCalledWith({
+      query: '词',
+      limit: 5,
+      dbPath: '/tmp/x.db',
+      tag: 'typescript',
+      source: 'local-markdown',
+      after: '2026-04-01',
+      before: '2026-04-30',
+    });
     const joined = out.join('');
     expect(joined).toContain('标题');
     expect(joined).not.toContain('未找到匹配结果');

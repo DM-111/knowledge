@@ -13,9 +13,11 @@ export {
   KnowledgeItemRepository,
   type CreateKnowledgeItemInput,
   type KnowledgeItemSummary,
+  type ListKnowledgeItemsQueryOptions,
+  type KnowledgeItemListRow,
 } from './repositories/knowledge-item-repository.js';
 export { TagRepository } from './repositories/tag-repository.js';
-export { SearchRepository, type SearchRow } from './repositories/search-repository.js';
+export { SearchRepository, type SearchRow, type SearchQueryOptions } from './repositories/search-repository.js';
 
 export interface InitializeStorageOptions {
   dbPath: string;

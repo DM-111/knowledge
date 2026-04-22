@@ -10,49 +10,30 @@ export interface SearchRow {
   hitSnippet: string;
 }
 
+export interface SearchQueryOptions {
+  limit: number;
+  tag?: string;
+  source?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+}
+
 const SNIPPET_OPEN = '【';
 const SNIPPET_CLOSE = '】';
 const SNIPPET_ELLIPSIS = '…';
 const SNIPPET_TOKEN = 20;
 
-const SELECT_SQL_BM25 = `
-  SELECT
-    c.id AS chunkId,
-    k.title AS title,
-    k.source_path AS sourcePath,
-    k.created_at AS createdAt,
-    snippet(chunks_fts, 0, @snippetOpen, @snippetClose, @snippetEllipsis, @snippetToken) AS hitSnippet
-  FROM chunks_fts
-  INNER JOIN chunks c ON c.id = chunks_fts.rowid
-  INNER JOIN knowledge_items k ON k.id = c.knowledge_item_id
-  WHERE chunks_fts MATCH @ftsMatch
-  ORDER BY bm25(chunks_fts) ASC
-  LIMIT @limit
-`.trim();
-
-const SELECT_SQL_RANK = `
-  SELECT
-    c.id AS chunkId,
-    k.title AS title,
-    k.source_path AS sourcePath,
-    k.created_at AS createdAt,
-    snippet(chunks_fts, 0, @snippetOpen, @snippetClose, @snippetEllipsis, @snippetToken) AS hitSnippet
-  FROM chunks_fts
-  INNER JOIN chunks c ON c.id = chunks_fts.rowid
-  INNER JOIN knowledge_items k ON k.id = c.knowledge_item_id
-  WHERE chunks_fts MATCH @ftsMatch
-  ORDER BY rank ASC
-  LIMIT @limit
-`.trim();
-
 type SearchStatement = Database.Statement<unknown[] | Record<string, unknown>>;
 
 export class SearchRepository {
-  private searchStatement: SearchStatement | undefined;
-
   constructor(private readonly provider: DatabaseProvider) {}
 
-  searchByFtsQuery(ftsMatchQuery: string, limit: number, db: Database.Database = this.provider.getConnection()): SearchRow[] {
+  searchByFtsQuery(
+    ftsMatchQuery: string,
+    options: SearchQueryOptions,
+    db: Database.Database = this.provider.getConnection(),
+  ): SearchRow[] {
+    const { limit } = options;
     if (!Number.isInteger(limit) || limit < 1) {
       throw new StorageError('search limit 必须为正整数', {
         step: 'search',
@@ -67,24 +48,71 @@ export class SearchRepository {
       snippetClose: SNIPPET_CLOSE,
       snippetEllipsis: SNIPPET_ELLIPSIS,
       snippetToken: SNIPPET_TOKEN,
+      source: options.source,
+      tag: options.tag,
+      createdAfter: options.createdAfter,
+      createdBefore: options.createdBefore,
     };
 
-    const statement = (this.searchStatement ??= this.prepareSearchStatement(db));
+    const statement = this.prepareSearchStatement(db, options);
     return statement.all(params) as SearchRow[];
   }
 
-  private prepareSearchStatement(db: Database.Database): SearchStatement {
-    for (const sql of [SELECT_SQL_BM25, SELECT_SQL_RANK]) {
+  private prepareSearchStatement(db: Database.Database, options: SearchQueryOptions): SearchStatement {
+    const whereClauses = ['chunks_fts MATCH @ftsMatch'];
+    if (options.source) {
+      whereClauses.push('k.source_type = @source');
+    }
+    if (options.createdAfter) {
+      whereClauses.push('k.created_at >= @createdAfter');
+    }
+    if (options.createdBefore) {
+      whereClauses.push('k.created_at <= @createdBefore');
+    }
+    if (options.tag) {
+      whereClauses.push(`
+        EXISTS (
+          SELECT 1
+          FROM item_tags it
+          INNER JOIN tags t ON t.id = it.tag_id
+          WHERE it.knowledge_item_id = k.id
+            AND t.name = @tag
+        )
+      `.trim());
+    }
+
+    const selectSqlByBm25 = buildSearchSql(whereClauses, 'bm25(chunks_fts) ASC');
+    const selectSqlByRank = buildSearchSql(whereClauses, 'rank ASC');
+
+    let firstError: unknown;
+    for (const sql of [selectSqlByBm25, selectSqlByRank]) {
       try {
         return db.prepare(sql);
-      } catch {
-        // 尝试下一种排序（bm25 不可用时回退为 rank；旧环境以 rank 为稳定相关度列）
-        continue;
+      } catch (err) {
+        firstError ??= err;
       }
     }
     throw new StorageError('无法编译全文检索 SQL（本环境可能不支持 FTS5 辅助函数）', {
       step: 'search',
       source: 'search-repository',
+      cause: firstError,
     });
   }
+}
+
+function buildSearchSql(whereClauses: string[], orderBy: string): string {
+  return `
+    SELECT
+      c.id AS chunkId,
+      k.title AS title,
+      k.source_path AS sourcePath,
+      k.created_at AS createdAt,
+      snippet(chunks_fts, 0, @snippetOpen, @snippetClose, @snippetEllipsis, @snippetToken) AS hitSnippet
+    FROM chunks_fts
+    INNER JOIN chunks c ON c.id = chunks_fts.rowid
+    INNER JOIN knowledge_items k ON k.id = c.knowledge_item_id
+    WHERE ${whereClauses.join('\n      AND ')}
+    ORDER BY ${orderBy}
+    LIMIT @limit
+  `.trim();
 }
