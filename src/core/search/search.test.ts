@@ -151,33 +151,35 @@ describe('searchByKeyword', () => {
     cleanup.push(root);
     seedSearchFixture(dbPath);
 
-    const hits = searchByKeyword({ query: '过滤词Alpha', limit: 10, dbPath });
-    expect(hits.length).toBeGreaterThanOrEqual(1);
-    const first = hits[0];
+    const result = searchByKeyword({ query: '过滤词Alpha', limit: 10, dbPath });
+    expect(result.total).toBeGreaterThanOrEqual(1);
+    expect(result.items.length).toBeGreaterThanOrEqual(1);
+    const first = result.items[0];
     expect(first.title).toBe('TypeScript 泛型');
     expect(first.sourcePath).toBe('/docs/ts-generics.md');
     expect(first.createdAt).toBe('2026-04-20T12:00:00.000Z');
     expect(first.hitSnippet).toMatch(/过滤词Alpha/);
   });
 
-  it('无命中时返回空数组', () => {
+  it('无命中时返回空 items 与 total 0', () => {
     const root = mkdtempSync(join(tmpdir(), 'knowledge-search-empty-'));
     const dbPath = join(root, 'k.db');
     cleanup.push(root);
     seedSearchFixture(dbPath);
 
-    const hits = searchByKeyword({ query: '不存在于库中的词zzzz', limit: 10, dbPath });
-    expect(hits).toEqual([]);
+    const result = searchByKeyword({ query: '不存在于库中的词zzzz', limit: 10, dbPath });
+    expect(result).toEqual({ items: [], total: 0 });
   });
 
-  it('在 limit 下仅返回前 N 条（相关度序）', () => {
+  it('在 limit 下仅返回前 N 条（相关度序），但 total 保留完整命中数', () => {
     const root = mkdtempSync(join(tmpdir(), 'knowledge-search-limit-'));
     const dbPath = join(root, 'k.db');
     cleanup.push(root);
     seedSearchFixture(dbPath);
 
-    const hits = searchByKeyword({ query: '过滤词Alpha', limit: 1, dbPath });
-    expect(hits).toHaveLength(1);
+    const result = searchByKeyword({ query: '过滤词Alpha', limit: 1, dbPath });
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBeGreaterThan(1);
   });
 
   it('在 limit 非法时抛出 SearchError', () => {
@@ -195,7 +197,7 @@ describe('searchByKeyword', () => {
     cleanup.push(root);
     seedSearchFixture(dbPath);
 
-    const hits = searchByKeyword({
+    const result = searchByKeyword({
       query: '过滤词Alpha',
       limit: 10,
       dbPath,
@@ -203,8 +205,9 @@ describe('searchByKeyword', () => {
       source: 'local-markdown',
     });
 
-    expect(hits.length).toBeGreaterThanOrEqual(1);
-    expect(new Set(hits.map((hit) => hit.title))).toEqual(new Set(['TypeScript 泛型']));
+    expect(result.items.length).toBeGreaterThanOrEqual(1);
+    expect(result.total).toBe(result.items.length);
+    expect(new Set(result.items.map((hit) => hit.title))).toEqual(new Set(['TypeScript 泛型']));
   });
 
   it('支持按日期范围过滤命中结果，并对 YYYY-MM-DD 采用包含边界', () => {
@@ -213,7 +216,7 @@ describe('searchByKeyword', () => {
     cleanup.push(root);
     seedSearchFixture(dbPath);
 
-    const hits = searchByKeyword({
+    const result = searchByKeyword({
       query: '过滤词Alpha',
       limit: 10,
       dbPath,
@@ -221,8 +224,9 @@ describe('searchByKeyword', () => {
       before: '2026-04-20',
     });
 
-    expect(hits.length).toBeGreaterThanOrEqual(1);
-    expect(new Set(hits.map((hit) => hit.title))).toEqual(new Set(['TypeScript 泛型', 'Web 版泛型教程']));
+    expect(result.items.length).toBeGreaterThanOrEqual(1);
+    expect(result.total).toBe(result.items.length);
+    expect(new Set(result.items.map((hit) => hit.title))).toEqual(new Set(['TypeScript 泛型', 'Web 版泛型教程']));
   });
 
   it('日期参数非法时抛出稳定的 SearchError', () => {

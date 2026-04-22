@@ -58,28 +58,25 @@ export class SearchRepository {
     return statement.all(params) as SearchRow[];
   }
 
+  countByFtsQuery(
+    ftsMatchQuery: string,
+    options: Omit<SearchQueryOptions, 'limit'>,
+    db: Database.Database = this.provider.getConnection(),
+  ): number {
+    const params = {
+      ftsMatch: ftsMatchQuery,
+      source: options.source,
+      tag: options.tag,
+      createdAfter: options.createdAfter,
+      createdBefore: options.createdBefore,
+    };
+    const statement = this.prepareCountStatement(db, options);
+    const row = statement.get(params) as { total?: number } | undefined;
+    return row?.total ?? 0;
+  }
+
   private prepareSearchStatement(db: Database.Database, options: SearchQueryOptions): SearchStatement {
-    const whereClauses = ['chunks_fts MATCH @ftsMatch'];
-    if (options.source) {
-      whereClauses.push('k.source_type = @source');
-    }
-    if (options.createdAfter) {
-      whereClauses.push('k.created_at >= @createdAfter');
-    }
-    if (options.createdBefore) {
-      whereClauses.push('k.created_at <= @createdBefore');
-    }
-    if (options.tag) {
-      whereClauses.push(`
-        EXISTS (
-          SELECT 1
-          FROM item_tags it
-          INNER JOIN tags t ON t.id = it.tag_id
-          WHERE it.knowledge_item_id = k.id
-            AND t.name = @tag
-        )
-      `.trim());
-    }
+    const whereClauses = buildWhereClauses(options);
 
     const selectSqlByBm25 = buildSearchSql(whereClauses, 'bm25(chunks_fts) ASC');
     const selectSqlByRank = buildSearchSql(whereClauses, 'rank ASC');
@@ -98,6 +95,38 @@ export class SearchRepository {
       cause: firstError,
     });
   }
+
+  private prepareCountStatement(
+    db: Database.Database,
+    options: Omit<SearchQueryOptions, 'limit'>,
+  ): SearchStatement {
+    return db.prepare(buildCountSql(buildWhereClauses(options)));
+  }
+}
+
+function buildWhereClauses(options: Omit<SearchQueryOptions, 'limit'>): string[] {
+  const whereClauses = ['chunks_fts MATCH @ftsMatch'];
+  if (options.source) {
+    whereClauses.push('k.source_type = @source');
+  }
+  if (options.createdAfter) {
+    whereClauses.push('k.created_at >= @createdAfter');
+  }
+  if (options.createdBefore) {
+    whereClauses.push('k.created_at <= @createdBefore');
+  }
+  if (options.tag) {
+    whereClauses.push(`
+      EXISTS (
+        SELECT 1
+        FROM item_tags it
+        INNER JOIN tags t ON t.id = it.tag_id
+        WHERE it.knowledge_item_id = k.id
+          AND t.name = @tag
+      )
+    `.trim());
+  }
+  return whereClauses;
 }
 
 function buildSearchSql(whereClauses: string[], orderBy: string): string {
@@ -114,5 +143,15 @@ function buildSearchSql(whereClauses: string[], orderBy: string): string {
     WHERE ${whereClauses.join('\n      AND ')}
     ORDER BY ${orderBy}
     LIMIT @limit
+  `.trim();
+}
+
+function buildCountSql(whereClauses: string[]): string {
+  return `
+    SELECT COUNT(*) AS total
+    FROM chunks_fts
+    INNER JOIN chunks c ON c.id = chunks_fts.rowid
+    INNER JOIN knowledge_items k ON k.id = c.knowledge_item_id
+    WHERE ${whereClauses.join('\n      AND ')}
   `.trim();
 }

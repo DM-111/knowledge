@@ -8,7 +8,14 @@ import {
 } from '../../storage/index.js';
 import { normalizeSearchFilters } from './filters.js';
 import { buildFtsMatchQuery } from './fts-match.js';
-import type { KnowledgeListItem, ListKnowledgeItemsOptions, ListKnowledgeItemsResult, SearchByKeywordOptions, SearchHit } from './types.js';
+import type {
+  KnowledgeListItem,
+  ListKnowledgeItemsOptions,
+  ListKnowledgeItemsResult,
+  SearchByKeywordOptions,
+  SearchHit,
+  SearchResult,
+} from './types.js';
 
 function mapRowToHit(row: SearchRow): SearchHit {
   return {
@@ -34,7 +41,7 @@ function isSqliteMatchFailure(error: unknown): boolean {
 /**
  * 单一入口：对知识库做 FTS5 关键词检索，返回带父级元数据的命中列表；相关度与 limit 在仓储层单条 SQL 中完成
  */
-export function searchByKeyword(options: SearchByKeywordOptions): SearchHit[] {
+export function searchByKeyword(options: SearchByKeywordOptions): SearchResult {
   const { query, limit, dbPath } = options;
   if (!Number.isInteger(limit) || limit < 1) {
     throw new SearchError('limit 必须为正整数', { step: 'search', source: 'searchByKeyword' });
@@ -52,7 +59,16 @@ export function searchByKeyword(options: SearchByKeywordOptions): SearchHit[] {
       createdAfter: filters.createdAfter,
       createdBefore: filters.createdBefore,
     });
-    return rows.map(mapRowToHit);
+    const total = repo.countByFtsQuery(matchString, {
+      tag: filters.tag,
+      source: filters.source,
+      createdAfter: filters.createdAfter,
+      createdBefore: filters.createdBefore,
+    });
+    return {
+      items: rows.map(mapRowToHit),
+      total,
+    };
   } catch (error) {
     if (error instanceof SearchError) {
       throw error;
@@ -118,6 +134,7 @@ export { buildFtsMatchQuery } from './fts-match.js';
 export type {
   SearchByKeywordOptions,
   SearchHit,
+  SearchResult,
   SearchFilterOptions,
   ListKnowledgeItemsOptions,
   KnowledgeListItem,

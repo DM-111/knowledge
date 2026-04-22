@@ -9,6 +9,7 @@ export {
   listKnowledgeItems,
   type SearchByKeywordOptions,
   type SearchHit,
+  type SearchResult,
   type ListKnowledgeItemsOptions,
   type KnowledgeListItem,
   type ListKnowledgeItemsResult,

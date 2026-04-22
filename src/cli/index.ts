@@ -1,19 +1,30 @@
-import { Command, CommanderError } from 'commander';
+import { Command } from 'commander';
 import { createIngestCommand } from './commands/ingest.js';
 import { createInitCommand } from './commands/init.js';
 import { createListCommand } from './commands/list.js';
 import { createSearchCommand } from './commands/search.js';
 import { createTagCommand } from './commands/tag.js';
-import { KbError, formatKbError } from '../errors/index.js';
+import { renderCliError } from './formatters/index.js';
 
-export function createProgram(): Command {
+export interface CreateProgramOptions {
+  json?: boolean;
+}
+
+export function createProgram(options: CreateProgramOptions = {}): Command {
   const program = new Command();
 
   program
     .name('kb')
     .description('本地知识服务 CLI')
     .showHelpAfterError()
-    .showSuggestionAfterError(true)
+    .showSuggestionAfterError(!options.json)
+    .configureOutput({
+      writeErr: (chunk) => {
+        if (!options.json) {
+          process.stderr.write(chunk);
+        }
+      },
+    })
     .exitOverride();
 
   program.addCommand(createInitCommand());
@@ -25,33 +36,25 @@ export function createProgram(): Command {
   return program;
 }
 
-export function handleCliError(error: unknown): void {
-  if (error instanceof CommanderError) {
-    if (error.code === 'commander.helpDisplayed' || error.exitCode === 0) {
-      process.exitCode = 0;
-      return;
-    }
+export interface HandleCliErrorOptions {
+  json?: boolean;
+  writeErr?: (chunk: string) => void;
+}
 
-    process.stderr.write(`${error.message}\n`);
-    process.exitCode = error.code === 'commander.unknownCommand' ? 2 : error.exitCode;
-    return;
+export function handleCliError(error: unknown, options: HandleCliErrorOptions = {}): void {
+  const rendered = renderCliError(error, { json: options.json });
+  if (rendered.shouldWrite) {
+    (options.writeErr ?? ((chunk: string) => process.stderr.write(chunk)))(rendered.text);
   }
-
-  if (error instanceof KbError) {
-    process.stderr.write(`${formatKbError(error)}\n`);
-    process.exitCode = error.exitCode ?? 1;
-    return;
-  }
-
-  process.stderr.write(`InternalError: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
+  process.exitCode = rendered.exitCode;
 }
 
 export async function run(argv = process.argv): Promise<void> {
+  const json = argv.includes('--json');
   try {
-    const program = createProgram();
+    const program = createProgram({ json });
     await program.parseAsync(argv);
   } catch (error: unknown) {
-    handleCliError(error);
+    handleCliError(error, { json });
   }
 }

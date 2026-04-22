@@ -8,6 +8,11 @@ export interface SearchHit {
   hitSnippet: string;
 }
 
+export interface SearchResult {
+  items: SearchHit[];
+  total: number;
+}
+
 export interface SearchFilterOptions {
   tag?: string;
   source?: string;

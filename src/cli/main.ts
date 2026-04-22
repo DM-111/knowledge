@@ -3,5 +3,5 @@
 import { handleCliError, run } from './index.js';
 
 run().catch((error: unknown) => {
-  handleCliError(error);
+  handleCliError(error, { json: process.argv.includes('--json') });
 });

@@ -1,37 +1,23 @@
 import { Command } from 'commander';
-import { listKnowledgeItems, type ListKnowledgeItemsResult } from '../../core/index.js';
+import { listKnowledgeItems } from '../../core/index.js';
+import { formatKnowledgeList, resolveOutputMode } from '../formatters/index.js';
 import { ensureConfigForCommand } from './init.js';
 import { addConfigOptions, getConfigOverrides, type ConfigOptionValues } from '../shared-options.js';
 import { parsePositiveIntegerOption } from './query-options.js';
 
 export interface ListCommandOptions extends ConfigOptionValues {
   limit?: string;
+  json?: boolean;
   tag?: string;
   source?: string;
   after?: string;
   before?: string;
 }
 
-export function formatKnowledgeListText(result: ListKnowledgeItemsResult): string {
-  if (result.items.length === 0) {
-    return '未找到匹配条目\n共 0 条，当前展示 0 条\n';
-  }
-
-  const parts: string[] = [];
-  result.items.forEach((item, index) => {
-    parts.push(`${index + 1}. [${item.id}] ${item.title}`);
-    parts.push(`   来源类型: ${item.sourceType}`);
-    parts.push(`   标签: ${item.tags.length > 0 ? item.tags.join(', ') : '-'}`);
-    parts.push(`   入库时间: ${item.createdAt}`);
-  });
-  parts.push(`共 ${result.total} 条，当前展示 ${result.items.length} 条`);
-  parts.push('');
-  return parts.join('\n');
-}
-
 export interface RunListCommandDependencies {
   ensureConfig?: typeof ensureConfigForCommand;
   list?: typeof listKnowledgeItems;
+  stdoutIsTTY?: boolean;
   writeOut?: (chunk: string) => void;
 }
 
@@ -42,6 +28,10 @@ export async function runListCommand(
   const ensure = dependencies.ensureConfig ?? ensureConfigForCommand;
   const list = dependencies.list ?? listKnowledgeItems;
   const writeOut = dependencies.writeOut ?? ((chunk: string) => process.stdout.write(chunk));
+  const mode = resolveOutputMode({
+    json: options.json,
+    stdoutIsTTY: dependencies.stdoutIsTTY ?? process.stdout.isTTY === true,
+  });
 
   const config = await ensure({
     commandName: 'list',
@@ -62,12 +52,17 @@ export async function runListCommand(
     before: options.before,
   });
 
-  writeOut(formatKnowledgeListText(result));
+  writeOut(
+    formatKnowledgeList(result, {
+      mode,
+    }),
+  );
 }
 
 export function createListCommand(): Command {
   return addConfigOptions(
     new Command('list')
+      .option('--json', '输出结构化 JSON，适合脚本与管道消费')
       .option('--tag <name>', '按单个标签精确过滤')
       .option('--source <type>', '按来源类型过滤，例如 local-markdown')
       .option('--after <date>', '仅返回入库时间不早于该日期/时间的条目（建议 YYYY-MM-DD；完整时间戳须含时区，如 2026-04-01T00:00:00Z）')

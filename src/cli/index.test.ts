@@ -45,4 +45,49 @@ describe('handleCliError', () => {
     expect(process.exitCode).toBe(1);
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('step: fetch\n'));
   });
+
+  it('在 --json 模式下序列化 KbError', () => {
+    handleCliError(
+      new IngestionError('文件不存在，无法读取来源内容', {
+        step: 'fetch',
+        source: '/tmp/missing.md',
+      }),
+      { json: true },
+    );
+
+    expect(process.exitCode).toBe(1);
+    expect(JSON.parse(stderrSpy.mock.calls[0]?.[0] as string)).toEqual({
+      error: {
+        type: 'IngestionError',
+        message: '文件不存在，无法读取来源内容',
+        step: 'fetch',
+        source: '/tmp/missing.md',
+      },
+    });
+  });
+
+  it('在 --json 模式下序列化 CommanderError', () => {
+    handleCliError(new CommanderError(1, 'commander.unknownCommand', 'unknown command'), { json: true });
+
+    expect(process.exitCode).toBe(2);
+    expect(JSON.parse(stderrSpy.mock.calls[0]?.[0] as string)).toEqual({
+      error: {
+        type: 'CommanderError',
+        message: 'unknown command',
+        step: 'command',
+      },
+    });
+  });
+
+  it('在 --json 模式下序列化未知错误', () => {
+    handleCliError(new Error('boom'), { json: true });
+
+    expect(process.exitCode).toBe(1);
+    expect(JSON.parse(stderrSpy.mock.calls[0]?.[0] as string)).toEqual({
+      error: {
+        type: 'InternalError',
+        message: 'boom',
+      },
+    });
+  });
 });

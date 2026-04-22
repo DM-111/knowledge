@@ -90,6 +90,7 @@ describe('kb search integration', () => {
     );
     expect(search.exitCode).toBe(0);
     expect(search.stdout).toContain('未找到匹配结果');
+    expect(search.stdout).not.toMatch(/\u001B\[[0-9;]*m/);
   });
 
   it('尊重 --limit', async () => {
@@ -206,6 +207,72 @@ describe('kb search integration', () => {
     expect(search.exitCode).toBe(0);
     expect(search.stdout).toContain('TypeScript 泛型入门');
     expect(search.stdout).not.toContain('四月归档笔记');
+    expect(search.stdout).not.toMatch(/\u001B\[[0-9;]*m/);
+  });
+
+  it('在非 TTY 下默认输出纯文本且不含 ANSI 污染', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-kb-search-plain-'));
+    const dbPath = join(root, 'data', 'knowledge.db');
+    const knowledgeBasePath = join(root, 'kb');
+    cleanupPaths.push(root);
+    const fixturePath = resolve('tests/fixtures/sample-article.md');
+
+    await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'ingest', fixturePath, '--knowledge-base-path', knowledgeBasePath, '--db-path', dbPath], {
+      cwd: process.cwd(),
+    });
+
+    const search = await execa(
+      'node',
+      ['--import', 'tsx', 'src/cli/main.ts', 'search', '泛型', '--knowledge-base-path', knowledgeBasePath, '--db-path', dbPath],
+      { cwd: process.cwd(), reject: false },
+    );
+
+    expect(search.exitCode).toBe(0);
+    expect(search.stdout).toContain('摘要:');
+    expect(search.stdout).not.toMatch(/\u001B\[[0-9;]*m/);
+  });
+
+  it('search --json 返回 items/total 结构化结果', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-kb-search-json-'));
+    const dbPath = join(root, 'data', 'knowledge.db');
+    const knowledgeBasePath = join(root, 'kb');
+    cleanupPaths.push(root);
+    const fixturePath = resolve('tests/fixtures/sample-article.md');
+    const aprilFixture = resolve('tests/fixtures/sample-article-april.md');
+
+    await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'ingest', fixturePath, '--knowledge-base-path', knowledgeBasePath, '--db-path', dbPath], {
+      cwd: process.cwd(),
+    });
+    await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'ingest', aprilFixture, '--knowledge-base-path', knowledgeBasePath, '--db-path', dbPath], {
+      cwd: process.cwd(),
+    });
+
+    const search = await execa(
+      'node',
+      [
+        '--import',
+        'tsx',
+        'src/cli/main.ts',
+        'search',
+        '泛型',
+        '--limit',
+        '1',
+        '--json',
+        '--knowledge-base-path',
+        knowledgeBasePath,
+        '--db-path',
+        dbPath,
+      ],
+      { cwd: process.cwd(), reject: false },
+    );
+
+    expect(search.exitCode).toBe(0);
+    expect(search.stdout).not.toMatch(/\u001B\[[0-9;]*m/);
+    expect(search.stderr).toBe('');
+    const payload = JSON.parse(search.stdout);
+    expect(payload.total).toBeGreaterThan(1);
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });
 
@@ -287,5 +354,49 @@ describe('kb list integration', () => {
     expect(list.stdout).toContain('TypeScript 泛型入门');
     expect(list.stdout).toContain('标签: typescript');
     expect(list.stdout).toContain('共 2 条，当前展示 1 条');
+    expect(list.stdout).not.toMatch(/\u001B\[[0-9;]*m/);
+  });
+
+  it('list --json 返回 items/total 结构化结果', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'knowledge-kb-list-json-'));
+    const dbPath = join(root, 'data', 'knowledge.db');
+    const knowledgeBasePath = join(root, 'kb');
+    cleanupPaths.push(root);
+    const fixturePath = resolve('tests/fixtures/sample-article.md');
+    const aprilFixture = resolve('tests/fixtures/sample-article-april.md');
+
+    await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'ingest', fixturePath, '--tag', 'typescript', '--knowledge-base-path', knowledgeBasePath, '--db-path', dbPath], {
+      cwd: process.cwd(),
+    });
+    await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'ingest', aprilFixture, '--tag', 'typescript', '--knowledge-base-path', knowledgeBasePath, '--db-path', dbPath], {
+      cwd: process.cwd(),
+    });
+
+    const list = await execa(
+      'node',
+      [
+        '--import',
+        'tsx',
+        'src/cli/main.ts',
+        'list',
+        '--tag',
+        'typescript',
+        '--limit',
+        '1',
+        '--json',
+        '--knowledge-base-path',
+        knowledgeBasePath,
+        '--db-path',
+        dbPath,
+      ],
+      { cwd: process.cwd(), reject: false },
+    );
+
+    expect(list.exitCode).toBe(0);
+    expect(list.stderr).toBe('');
+    expect(list.stdout).not.toMatch(/\u001B\[[0-9;]*m/);
+    const payload = JSON.parse(list.stdout);
+    expect(payload.total).toBe(2);
+    expect(payload.items).toHaveLength(1);
   });
 });
