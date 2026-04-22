@@ -27,18 +27,31 @@ export function buildFtsMatchQuery(raw: string): string {
   return terms.map((term) => toPrefixMatchToken(term)).join(' AND ');
 }
 
+const UNSUPPORTED_FTS_PATTERN = /["'():^+\-{}[\]]/u;
+const RESERVED_FTS_TOKENS = new Set(['AND', 'OR', 'NOT', 'NEAR']);
+
 function toPrefixMatchToken(term: string): string {
   const t = term.trim();
   if (t.length === 0) {
     return t;
   }
-  if (t.includes('"')) {
-    throw new SearchError('检索词中暂不支持双引号，请换用其它关键词', {
+
+  validateLiteralToken(t);
+
+  return t.endsWith('*') ? t : `${t}*`;
+}
+
+function validateLiteralToken(token: string): void {
+  const hasTrailingWildcard = token.endsWith('*');
+  const body = hasTrailingWildcard ? token.slice(0, -1) : token;
+  const wildcardInMiddle = body.includes('*');
+
+  if (body.length === 0 || wildcardInMiddle || UNSUPPORTED_FTS_PATTERN.test(body) || RESERVED_FTS_TOKENS.has(token)) {
+    throw new SearchError('检索词包含当前不支持的 FTS 特殊字符，请改用更简单的关键词', {
       step: 'search',
       source: 'fts-match',
     });
   }
-  return t.endsWith('*') ? t : `${t}*`;
 }
 
 /**

@@ -25,19 +25,22 @@ describe('formatSearchHitsText', () => {
 });
 
 describe('runSearchCommand', () => {
-  it('无关键词时抛出 SearchError', async () => {
+  it('无关键词时先抛出 SearchError，不触发配置预检', async () => {
+    const ensureConfig = vi.fn(async () => ({
+      knowledgeBasePath: '/tmp/kb',
+      dbPath: '/tmp/kb/db.sqlite',
+    }));
+
     await expect(
       runSearchCommand(
         undefined,
         { limit: '20' },
         {
-          ensureConfig: async () => ({
-            knowledgeBasePath: '/tmp/kb',
-            dbPath: '/tmp/kb/db.sqlite',
-          }),
-        } as RunSearchCommandDependencies,
+          ensureConfig,
+        },
       ),
     ).rejects.toThrow(SearchError);
+    expect(ensureConfig).not.toHaveBeenCalled();
   });
 
   it('有结果时写入 stdout', async () => {
@@ -121,6 +124,17 @@ describe('runSearchCommand', () => {
   it('在 --limit 非可解析正整数时抛出 SearchError', async () => {
     await expect(
       runSearchCommand('词', { limit: 'nope' } as { limit: string }, {
+        ensureConfig: async () => ({
+          knowledgeBasePath: '/tmp/kb',
+          dbPath: '/tmp/x.db',
+        }),
+      } as RunSearchCommandDependencies),
+    ).rejects.toThrow(SearchError);
+  });
+
+  it('在 --limit 含非数字后缀时抛出 SearchError', async () => {
+    await expect(
+      runSearchCommand('词', { limit: '2abc' } as { limit: string }, {
         ensureConfig: async () => ({
           knowledgeBasePath: '/tmp/kb',
           dbPath: '/tmp/x.db',

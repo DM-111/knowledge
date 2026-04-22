@@ -1,6 +1,6 @@
 # Story 3.1: 全文检索与结果展示（kb search）
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -44,6 +44,12 @@ so that 我能快速找回之前入库的知识.
   - [x] 成功时向 **stdout** 输出可读的**多行/列表**结果；**本故事不**实现 Epic 3.3 的完整「TTY/非 TTY/`--json`」分支，但输出必须满足 AC1 的字段与可读性  
   - [x] 无匹配时**不写 stderr**，**退出码 0**  
 - [x] 测试：`*.test.ts` 与 `tests/integration/` 按项目惯例补齐（核心查询、CLI 无结果、limit、至少一条 happy path）
+
+### Review Findings
+
+- [x] [Review][Patch] FTS 检索词仅拦截双引号，`C++`、括号、冒号等常见字面量仍会原样进入 `MATCH`，不满足“处理 FTS 特殊字符并避免不可预期语法错误”的故事约束。 [`src/core/search/fts-match.ts:30`]
+- [x] [Review][Patch] `--limit` 使用 `Number.parseInt()` 解析，像 `2abc` 这类非纯整数输入会被静默接受为 `2`，与“须为正整数”的参数契约不一致。 [`src/cli/commands/search.ts:11`]
+- [x] [Review][Patch] `runSearchCommand()` 先做配置预检再校验必填 `query`，导致 `kb search` / `kb search ""` 在未初始化环境下可能先报配置错误，而不是稳定提示缺少关键词。 [`src/cli/commands/search.ts:49`]
 
 ## Dev Notes
 

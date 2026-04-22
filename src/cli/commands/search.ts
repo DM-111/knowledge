@@ -42,6 +42,13 @@ export async function runSearchCommand(
   options: SearchCommandOptions,
   dependencies: RunSearchCommandDependencies = {},
 ): Promise<void> {
+  if (query === undefined || query.trim() === '') {
+    throw new SearchError('请提供检索关键词，例如: kb search "TypeScript 泛型"', {
+      step: 'command',
+      source: 'search',
+    });
+  }
+
   const ensure = dependencies.ensureConfig ?? ensureConfigForCommand;
   const search = dependencies.search ?? searchByKeyword;
   const writeOut = dependencies.writeOut ?? ((c: string) => process.stdout.write(c));
@@ -50,13 +57,6 @@ export async function runSearchCommand(
     commandName: 'search',
     overrides: getConfigOverrides(options),
   });
-
-  if (query === undefined || query.trim() === '') {
-    throw new SearchError('请提供检索关键词，例如: kb search "TypeScript 泛型"', {
-      step: 'command',
-      source: 'search',
-    });
-  }
 
   const limit = parsePositiveIntegerOption({
     raw: options.limit,
