@@ -27,7 +27,6 @@ describe('cli errors', () => {
 
   it('formats KbError failures from placeholder commands after config preflight', async () => {
     const homeDir = createTempPath('cli-errors-home');
-    const cwd = createTempPath('cli-errors-workspace');
     const configDir = join(homeDir, '.config', 'kb');
     mkdirSync(configDir, { recursive: true });
     writeFileSync(
@@ -35,7 +34,7 @@ describe('cli errors', () => {
       ['knowledgeBasePath: "/tmp/kb"', 'dbPath: "/tmp/kb/knowledge.db"', ''].join('\n'),
     );
 
-    const result = await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'search', 'typescript'], {
+    const result = await execa('node', ['--import', 'tsx', 'src/cli/main.ts', 'list'], {
       cwd: process.cwd(),
       env: {
         HOME: homeDir,
@@ -46,7 +45,7 @@ describe('cli errors', () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('SearchError');
     expect(result.stderr).toContain('step: command');
-    expect(result.stderr).toContain('search');
+    expect(result.stderr).toContain('list');
   });
 });
 

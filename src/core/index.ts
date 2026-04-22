@@ -4,6 +4,7 @@ export {
   inspectExistingSource,
   type InspectExistingSourceOptions,
 } from './ingestion/inspect-existing-source.js';
+export { searchByKeyword, type SearchByKeywordOptions, type SearchHit, buildFtsMatchQuery } from './search/index.js';
 
 export interface EnsureStorageReadyOptions {
   dbPath: string;
