@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-20T13:22:14+08:00
-last_updated: 2026-04-22T15:00:00+08:00
+last_updated: 2026-04-22T22:30:00+08:00
 project: knowledge
 project_key: NOKEY
 tracking_system: file-system
@@ -55,7 +55,7 @@ development_status:
   epic-2-retrospective: optional
   epic-3: in-progress
   3-1-全文检索与结果展示-kb-search: review
-  3-2-检索过滤与知识条目列表-kb-list: backlog
+  3-2-检索过滤与知识条目列表-kb-list: done
   3-3-输出格式化策略-tty-非-tty-json: backlog
   epic-3-retrospective: optional
   epic-4: backlog
