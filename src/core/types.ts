@@ -1,4 +1,22 @@
-export type SourceType = 'local-markdown' | 'web';
+export type SourceType = 'local-markdown' | 'web' | 'epub' | 'pdf';
+
+export interface ContentMetadata {
+  // Universal
+  author?: string;
+  publishedDate?: string;
+  language?: string;
+  description?: string;
+  // Web-specific
+  domain?: string;
+  url?: string;
+  siteName?: string;
+  // Book-specific
+  isbn?: string;
+  publisher?: string;
+  chapters?: number;
+  // PDF-specific
+  pageCount?: number;
+}
 
 export interface ProgressEvent {
   step: string;
@@ -13,6 +31,7 @@ export interface RawContent {
   sourcePath: string;
   markdown: string;
   createdAt: string;
+  metadata?: ContentMetadata;
 }
 
 export interface KnowledgeItem {
@@ -55,4 +74,5 @@ export interface IngestResult {
   knowledgeItemId: number;
   tags: string[];
   note?: string;
+  metadata?: ContentMetadata;
 }

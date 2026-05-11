@@ -69,10 +69,10 @@ const DEFAULT_PROMPTS: IngestPromptAdapter = {
 export function createIngestCommand(): Command {
   return addConfigOptions(
     new Command('ingest')
-      .argument('[source]', '待入库来源')
+      .argument('[source]', '待入库来源（URL、epub、pdf 或 Markdown 文件路径）')
       .option('--tag <tags>', '用逗号分隔的标签列表')
       .option('--note <note>', '入库备注')
-      .description('将本地 Markdown 内容入库到知识库')
+      .description('将内容入库到知识库（支持 URL、epub、pdf、Markdown）')
       .action(async (...args: unknown[]) => {
         const source = args[0];
         const command = args[args.length - 1] as Command;
@@ -88,7 +88,7 @@ export async function runIngestCommand(
   dependencies: RunIngestCommandDependencies = {},
 ): Promise<void> {
   if (typeof source !== 'string' || source.trim().length === 0) {
-    throw new IngestionError('ingest 命令需要提供待入库的本地 Markdown 路径', {
+    throw new IngestionError('ingest 命令需要提供待入库的来源（URL、epub、pdf 或 Markdown 路径）', {
       step: 'command',
       source: 'ingest',
     });
@@ -210,6 +210,10 @@ function formatIngestSummary(result: IngestResult): string {
     `字数: ${result.wordCount}`,
     `切分块数: ${result.chunkCount}`,
   ];
+
+  if (result.metadata?.author) {
+    lines.push(`作者: ${result.metadata.author}`);
+  }
 
   if (result.tags.length > 0) {
     lines.push(`标签: ${result.tags.join(', ')}`);

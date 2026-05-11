@@ -230,10 +230,10 @@ describe('kb ingest integration', () => {
     );
 
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain('不支持的文件类型 .png');
+    expect(result.stderr).toContain('不支持的来源类型 .png');
     expect(result.stderr).toContain('.md');
-    expect(result.stderr).toContain('.markdown');
-    expect(result.stderr).toContain('.mdx');
+    expect(result.stderr).toContain('.epub');
+    expect(result.stderr).toContain('.pdf');
   });
 
   it('重复来源时可选择跳过或覆盖，数据库始终保持单条一致记录', async () => {

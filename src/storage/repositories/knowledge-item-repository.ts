@@ -10,6 +10,7 @@ export interface CreateKnowledgeItemInput {
   wordCount: number;
   createdAt: string;
   note?: string;
+  metadataJson?: string;
 }
 
 export interface KnowledgeItemSummary {
@@ -50,8 +51,9 @@ export class KnowledgeItemRepository {
             content,
             word_count,
             created_at,
-            note
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            note,
+            metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
       .run(
@@ -62,6 +64,7 @@ export class KnowledgeItemRepository {
         input.wordCount,
         input.createdAt,
         input.note ?? null,
+        input.metadataJson ?? null,
       );
 
     return Number(result.lastInsertRowid);

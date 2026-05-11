@@ -27,7 +27,7 @@ describe('storage ready integration', () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all() as Array<{ name: string }>;
 
-    expect(provider.getUserVersion()).toBe(3);
+    expect(provider.getUserVersion()).toBe(4);
     expect(tables.map((table) => table.name)).toContain('knowledge_items');
     expect(tables.map((table) => table.name)).toContain('chunks');
     expect(tables.map((table) => table.name)).toContain('chunks_fts');

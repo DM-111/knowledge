@@ -146,7 +146,7 @@ describe('ingest pipeline', () => {
           events.push(event);
         },
       }),
-    ).rejects.toThrow('不支持的文件类型 .txt');
+    ).rejects.toThrow('不支持的来源类型 .txt');
 
     expect(events.map((event) => `${event.step}:${event.status}`)).toEqual([
       'resolve-adapter:start',

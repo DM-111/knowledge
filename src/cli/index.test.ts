@@ -21,7 +21,7 @@ describe('handleCliError', () => {
 
   it('对输入不合法的 KbError 使用退出码 2', () => {
     handleCliError(
-      new IngestionError('不支持的文件类型 .png，当前支持的 Markdown 扩展名：.md、.markdown、.mdx', {
+      new IngestionError('不支持的来源类型 .png，当前支持的格式：URL (http/https)、.epub / .mobi / .azw3、.pdf、.md、.markdown、.mdx', {
         step: 'resolve-adapter',
         source: '/tmp/image.png',
         exitCode: 2,
@@ -30,7 +30,7 @@ describe('handleCliError', () => {
 
     expect(process.exitCode).toBe(2);
     expect(stderrSpy).toHaveBeenCalledWith(
-      expect.stringContaining('不支持的文件类型 .png，当前支持的 Markdown 扩展名：.md、.markdown、.mdx\n'),
+      expect.stringContaining('不支持的来源类型 .png'),
     );
   });
 

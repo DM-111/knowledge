@@ -8,7 +8,7 @@ import {
   initializeStorage,
   type DatabaseProvider,
 } from '../../storage/index.js';
-import type { ChunkDraft, IngestResult } from '../types.js';
+import type { ChunkDraft, ContentMetadata, IngestResult } from '../types.js';
 import { chunkMarkdownContent } from './chunker.js';
 import type { IngestOptions } from './adapter.js';
 
@@ -188,6 +188,7 @@ export async function ingestSourceWithProvider(
           wordCount,
           createdAt: rawContent.createdAt,
           note: normalizedNote,
+          metadataJson: rawContent.metadata ? JSON.stringify(rawContent.metadata) : undefined,
         },
         db,
       );
@@ -229,6 +230,7 @@ export async function ingestSourceWithProvider(
     knowledgeItemId,
     tags: normalizedTags,
     note: normalizedNote,
+    metadata: rawContent.metadata,
   };
 }
 

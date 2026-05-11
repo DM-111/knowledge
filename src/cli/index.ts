@@ -3,6 +3,7 @@ import { createIngestCommand } from './commands/ingest.js';
 import { createInitCommand } from './commands/init.js';
 import { createListCommand } from './commands/list.js';
 import { createSearchCommand } from './commands/search.js';
+import { createSyncCommand } from './commands/sync.js';
 import { createTagCommand } from './commands/tag.js';
 import { renderCliError } from './formatters/index.js';
 
@@ -32,6 +33,7 @@ export function createProgram(options: CreateProgramOptions = {}): Command {
   program.addCommand(createSearchCommand());
   program.addCommand(createListCommand());
   program.addCommand(createTagCommand());
+  program.addCommand(createSyncCommand());
 
   return program;
 }
