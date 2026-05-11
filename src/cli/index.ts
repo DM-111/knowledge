@@ -5,6 +5,7 @@ import { createListCommand } from './commands/list.js';
 import { createSearchCommand } from './commands/search.js';
 import { createSyncCommand } from './commands/sync.js';
 import { createTagCommand } from './commands/tag.js';
+import { indexCommand } from './commands/index-cmd.js';
 import { renderCliError } from './formatters/index.js';
 
 export interface CreateProgramOptions {
@@ -34,6 +35,7 @@ export function createProgram(options: CreateProgramOptions = {}): Command {
   program.addCommand(createListCommand());
   program.addCommand(createTagCommand());
   program.addCommand(createSyncCommand());
+  program.addCommand(indexCommand);
 
   return program;
 }
