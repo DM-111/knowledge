@@ -1,8 +1,12 @@
 # Handoff: AI-Native 阅读知识沉淀系统
 
-## 当前状态：输入层 MVP 完成
+## 当前状态：M2 存储与召回 80% 完成
 
-截至 2026-05-11，系统的**输入层（Ingestion Layer）**已全部实现并通过 E2E 验证。核心能力：把 URL、epub、pdf 三种来源干净地转换为 Markdown 并存入知识库，再单向同步到 Obsidian vault 供人阅读。
+截至 2026-05-11，系统的**输入层（Ingestion Layer）**已全部实现并通过 E2E 验证，**存储与召回层（M2）**的核心能力已就绪：
+- `kb` 和 `kb-mcp` 命令已全局可用
+- MCP Server 已注册到 Claude Code（`~/.claude/.mcp.json`），提供 `kb_search`、`kb_list`、`kb_ingest` 三个 tool
+- `kb index` 支持 llms.txt 格式导出
+- 搜索支持按 tag/source/date 过滤
 
 ---
 
@@ -128,18 +132,18 @@ M1 输入层 [██████████] 100% ← 当前位置
    ├── Obsidian Sync (kb sync)          ✅ Done
    └── /read Skill                      ✅ Done
 
-M2 存储与召回 [░░░░░░░░░░] 0%
-   ├── kb CLI 全局可用 (pnpm link)
-   ├── MCP Server 包装 kb (让 Claude 直接查询)
-   ├── llms.txt 索引结构
-   ├── 增强搜索 (按 author, date range, source type 过滤)
-   └── Obsidian 双向标注回写
+M2 存储与召回 [████████░░] 80%
+   ├── kb CLI 全局可用 (npm link)        ✅ Done
+   ├── MCP Server 包装 kb (让 Claude 直接查询)  ✅ Done
+   ├── llms.txt 索引结构                 ✅ Done
+   ├── 增强搜索 (按 tag, date range, source type 过滤)  ✅ Done
+   └── Obsidian 双向标注回写              ⏳ 待实现 (可延至 M3)
 
-M3 交互式学习 [░░░░░░░░░░] 0%
-   ├── Book-to-Skill: 将书籍转为 Claude Code Skill
-   ├── 苏格拉底探测器 (诚实度测试)
-   ├── 自动化验证流 (生成练习 + 运行验证)
-   └── 阅读进度追踪
+M3 交互式学习 [████████░░] 80%
+   ├── Book-to-Skill (kb book-extract / kb_skill_generate)  ✅ Done
+   ├── 苏格拉底探测器 (kb quiz / kb_quiz)                    ✅ Done
+   ├── 自动化验证流 (kb exercise / kb_exercise)              ✅ Done
+   └── 阅读进度追踪 (kb progress / kb_progress)             ✅ Done
 
 M4 知识图谱 [░░░░░░░░░░] 0%
    ├── 实体提取 (人物、概念、依赖关系)
@@ -150,13 +154,18 @@ M4 知识图谱 [░░░░░░░░░░] 0%
 
 ---
 
-## 下一步建议 (M2 优先)
+## 下一步建议 (M2 收尾 + M3 启动)
 
-### 最高优先级
+### M2 剩余项
 
-1. **`pnpm link --global`** — 让 `kb` 命令全局可用，不再需要 `cd` + `pnpm dev`
-2. **MCP Server** — 包装 kb 的 search/list/ingest 为 MCP tool，让 Claude 能直接查询知识库而不需要用户手动触发
-3. **PDF 首次使用** — 等 marker 模型下载完成后验证 PDF 流程
+1. **Obsidian 双向标注回写** — 在 Obsidian 中对文章添加的高亮/批注能同步回 kb 数据库（可延后到 M3 一起做）
+
+### M3 优先级
+
+1. **Book-to-Skill** — 将一本书的核心内容提炼为 Claude Code Skill，实现"读完即用"
+2. **苏格拉底探测器** — 验证阅读理解深度的对话式测试
+3. **自动化验证流** — 生成练习题 + 运行验证
+4. **阅读进度追踪** — 按章节/百分比追踪阅读进度
 
 ### 待打磨
 
@@ -189,16 +198,22 @@ M4 知识图谱 [░░░░░░░░░░] 0%
 # 1. 进入项目
 cd /Users/dm/MyCode/knowledge
 
-# 2. 运行测试确认环境正常
-pnpm test
+# 2. 全局命令已就绪
+kb list              # 列出知识库内容
+kb search "keyword"  # 全文搜索
+kb index             # 输出 llms.txt 索引
+kb ingest <url|epub|pdf> --tag <tag>  # 入库新内容
+kb sync --vault /Users/dm/ObsidianRepo/did-you-know  # 同步到 Obsidian
 
-# 3. 试一下入库
-pnpm dev ingest "https://example.com/article" --tag test
-pnpm dev sync --vault /Users/dm/ObsidianRepo/did-you-know
-pnpm dev list
-pnpm dev search "keyword"
+# 3. MCP Server (Claude Code 自动连接)
+# 已配置在 ~/.claude/.mcp.json，Claude 可直接调用 kb_search/kb_list/kb_ingest
 
-# 4. 查看未提交的变更
+# 4. 开发调试
+pnpm test            # 运行测试
+pnpm dev <command>   # 开发模式运行
+pnpm build           # 构建
+
+# 5. 查看未提交的变更
 git diff --stat
 git status
 ```
