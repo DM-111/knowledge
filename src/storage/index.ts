@@ -18,6 +18,18 @@ export {
 } from './repositories/knowledge-item-repository.js';
 export { TagRepository } from './repositories/tag-repository.js';
 export { SearchRepository, type SearchRow, type SearchQueryOptions } from './repositories/search-repository.js';
+export {
+  VectorRepository,
+  type VectorSearchResult,
+  type VectorInsertInput,
+} from './repositories/vector-repository.js';
+export {
+  NotesRepository,
+  type NoteIndexRow,
+  type CreateNoteRowInput,
+  type UpdateNoteRowInput,
+  type ListNotesQueryOptions,
+} from './repositories/notes-repository.js';
 
 export interface InitializeStorageOptions {
   dbPath: string;

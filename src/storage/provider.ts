@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { StorageError } from '../errors/index.js';
@@ -10,11 +11,18 @@ export interface DatabaseProvider {
   getUserVersion(): number;
   setUserVersion(version: number): void;
   close(): void;
+  /** sqlite-vec 扩展是否已加载 */
+  readonly vectorSearchEnabled: boolean;
 }
 
 class BetterSqliteDatabaseProvider implements DatabaseProvider {
   readonly dbPath: string;
   private readonly connection: Database.Database;
+  private _vectorSearchEnabled = false;
+
+  get vectorSearchEnabled(): boolean {
+    return this._vectorSearchEnabled;
+  }
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -32,6 +40,20 @@ class BetterSqliteDatabaseProvider implements DatabaseProvider {
         source: dbPath,
         cause: error,
       });
+    }
+
+    this.tryLoadVecExtension();
+  }
+
+  private tryLoadVecExtension(): void {
+    try {
+      const require = createRequire(import.meta.url);
+      const { load } = require('sqlite-vec');
+      load(this.connection);
+      this._vectorSearchEnabled = true;
+    } catch {
+      // sqlite-vec 不可用 — 向量搜索功能将被禁用，FTS5 搜索不受影响
+      this._vectorSearchEnabled = false;
     }
   }
 

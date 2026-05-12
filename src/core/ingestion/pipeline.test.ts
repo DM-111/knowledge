@@ -390,5 +390,6 @@ function createFailingProvider(): DatabaseProvider {
     },
     setUserVersion() {},
     close() {},
+    vectorSearchEnabled: false,
   };
 }

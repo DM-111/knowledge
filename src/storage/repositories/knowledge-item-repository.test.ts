@@ -98,11 +98,11 @@ describe('storage repositories', () => {
       | undefined;
     const ftsRow = provider
       .getConnection()
-      .prepare('SELECT rowid, content FROM chunks_fts WHERE chunks_fts MATCH ?')
+      .prepare('SELECT rowid, content_segmented FROM chunks_fts WHERE chunks_fts MATCH ?')
       .get('第一段*') as
       | {
           rowid: number;
-          content: string;
+          content_segmented: string;
         }
       | undefined;
 
@@ -120,7 +120,7 @@ describe('storage repositories', () => {
     });
     expect(ftsRow).toEqual({
       rowid: expect.any(Number),
-      content: '第一段内容。',
+      content_segmented: '第一段内容。',
     });
 
     provider.close();

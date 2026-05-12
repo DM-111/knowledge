@@ -10,12 +10,13 @@ export {
   type ConfigSources,
   type LoadConfigOptions,
   type LoadedConfig,
+  type ResolvedConfig,
 } from './schema.js';
 export { loadConfig } from './loader.js';
 export { writeUserConfig, type WriteUserConfigOptions, type WriteUserConfigResult } from './writer.js';
 
 import { ConfigError } from '../errors/index.js';
-import { type Config, type ConfigField } from './schema.js';
+import { type Config, type ConfigField, type ResolvedConfig } from './schema.js';
 
 export function getMissingConfigFields(
   config: Config,
@@ -28,7 +29,7 @@ export function assertRequiredConfig(
   config: Config,
   requiredFields: readonly ConfigField[] = ['knowledgeBasePath', 'dbPath'],
   source = 'config',
-): asserts config is Required<Config> {
+): asserts config is ResolvedConfig {
   const missingFields = getMissingConfigFields(config, requiredFields);
 
   if (missingFields.length > 0) {

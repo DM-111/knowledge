@@ -4,6 +4,7 @@ import type { DatabaseProvider } from '../provider.js';
 export interface CreateChunkInput {
   chunkIndex: number;
   content: string;
+  contentSegmented?: string;
   startOffset: number;
   endOffset: number;
   overlapStartOffset: number;
@@ -24,11 +25,12 @@ export class ChunkRepository {
           knowledge_item_id,
           chunk_index,
           content,
+          content_segmented,
           start_offset,
           end_offset,
           overlap_start_offset,
           overlap_end_offset
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
     );
 
@@ -37,6 +39,7 @@ export class ChunkRepository {
         knowledgeItemId,
         chunk.chunkIndex,
         chunk.content,
+        chunk.contentSegmented ?? null,
         chunk.startOffset,
         chunk.endOffset,
         chunk.overlapStartOffset,

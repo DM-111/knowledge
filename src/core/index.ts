@@ -14,6 +14,7 @@ export {
   type KnowledgeListItem,
   type ListKnowledgeItemsResult,
   buildFtsMatchQuery,
+  buildSimpleFtsMatchQuery,
 } from './search/index.js';
 
 export interface EnsureStorageReadyOptions {

@@ -9,6 +9,7 @@ import {
   type DatabaseProvider,
 } from '../../storage/index.js';
 import type { ChunkDraft, ContentMetadata, IngestResult } from '../types.js';
+import { getTokenizerSync } from '../tokenizer/index.js';
 import { chunkMarkdownContent } from './chunker.js';
 import type { IngestOptions } from './adapter.js';
 
@@ -18,6 +19,8 @@ export interface IngestSourceOptions extends IngestOptions {
   tags?: string[];
   note?: string;
   duplicateStrategy?: 'error' | 'replace' | 'skip';
+  /** 跳过 embedding 生成（默认跳过；设为 false 以在入库时同步生成 embedding） */
+  skipEmbeddings?: boolean;
 }
 
 export async function ingestSource(options: IngestSourceOptions): Promise<IngestResult> {
@@ -144,6 +147,13 @@ export async function ingestSourceWithProvider(
   });
   throwIfAborted(options);
 
+  // 分词步骤：为每个 chunk 生成 content_segmented
+  const tokenizer = getTokenizerSync();
+  const segmentedChunkDrafts = chunkDrafts.map((chunk) => ({
+    ...chunk,
+    contentSegmented: tokenizer.segment(chunk.content).segmented,
+  }));
+
   const knowledgeItemRepository = new KnowledgeItemRepository(provider);
   const chunkRepository = new ChunkRepository(provider);
   const tagRepository = new TagRepository(provider);
@@ -193,7 +203,7 @@ export async function ingestSourceWithProvider(
         db,
       );
 
-      chunkRepository.createMany(itemId, toChunkInputs(chunkDrafts), db);
+      chunkRepository.createMany(itemId, toChunkInputs(segmentedChunkDrafts), db);
       const tagIds = tagRepository.ensureTagIds(normalizedTags, db);
       tagRepository.linkTagsToItem(itemId, tagIds, db);
       return itemId;
@@ -222,6 +232,11 @@ export async function ingestSourceWithProvider(
     detail: `FTS 触发器已同步 ${chunkDrafts.length} 个 chunk`,
   });
 
+  // 向量嵌入步骤（默认跳过，用户需通过 --embed 或 kb reindex --phase vectors 显式触发）
+  if (options.skipEmbeddings === false) {
+    await tryGenerateEmbeddings(provider, knowledgeItemId, options);
+  }
+
   return {
     title: rawContent.title,
     sourcePath: rawContent.sourcePath,
@@ -234,10 +249,11 @@ export async function ingestSourceWithProvider(
   };
 }
 
-function toChunkInputs(chunkDrafts: readonly ChunkDraft[]) {
+function toChunkInputs(chunkDrafts: readonly (ChunkDraft & { contentSegmented?: string })[]) {
   return chunkDrafts.map((chunk, chunkIndex) => ({
     chunkIndex,
     content: chunk.overlap ? `${chunk.overlap}\n\n${chunk.content}` : chunk.content,
+    contentSegmented: chunk.contentSegmented,
     startOffset: chunk.startOffset,
     endOffset: chunk.endOffset,
     overlapStartOffset: chunk.overlapStartOffset,
@@ -331,4 +347,84 @@ function emitStepError(
     detail,
     metadata: error instanceof Error ? { errorName: error.name, message: error.message } : undefined,
   });
+}
+
+/**
+ * 尝试为刚入库的 chunks 生成 embeddings。
+ * 失败时不抛异常（embedding 是增强功能，不应阻塞入库）。
+ * 使用 5 秒超时避免模型下载阻塞入库流程。
+ */
+async function tryGenerateEmbeddings(
+  provider: DatabaseProvider,
+  knowledgeItemId: number,
+  options: IngestSourceOptions,
+): Promise<void> {
+  try {
+    const { tryGetEmbeddingProvider } = await import('../embedding/index.js');
+
+    // 使用 AbortSignal 设置 5 秒超时
+    const timeout = AbortSignal.timeout(5000);
+    const embeddingProvider = await Promise.race([
+      tryGetEmbeddingProvider(),
+      new Promise<null>((_, reject) => {
+        timeout.addEventListener('abort', () => reject(new Error('timeout')));
+      }),
+    ]);
+
+    if (!embeddingProvider) return;
+
+    const { VectorRepository } = await import('../../storage/repositories/vector-repository.js');
+
+    const db = provider.getConnection();
+    const vecRepo = new VectorRepository(provider);
+
+    // 获取刚入库的 chunks
+    const chunks = db
+      .prepare('SELECT id, content FROM chunks WHERE knowledge_item_id = ?')
+      .all(knowledgeItemId) as Array<{ id: number; content: string }>;
+
+    if (chunks.length === 0) return;
+
+    emitProgress(options, {
+      step: 'embed',
+      status: 'start',
+      detail: `为 ${chunks.length} 个 chunk 生成 embedding`,
+    });
+
+    // 批量生成 embedding
+    const BATCH_SIZE = 32;
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE);
+      const texts = batch.map((c) => c.content);
+      const embeddings = await embeddingProvider.embed(texts);
+
+      provider.transaction((txDb) => {
+        vecRepo.insertMany(
+          batch.map((chunk, idx) => ({
+            chunkId: chunk.id,
+            embedding: embeddings[idx],
+          })),
+          txDb,
+        );
+        vecRepo.markAsEmbedded(
+          batch.map((c) => c.id),
+          1,
+          txDb,
+        );
+      });
+    }
+
+    emitProgress(options, {
+      step: 'embed',
+      status: 'complete',
+      detail: `已为 ${chunks.length} 个 chunk 生成 embedding`,
+    });
+  } catch {
+    // Embedding 失败不阻塞入库
+    emitProgress(options, {
+      step: 'embed',
+      status: 'error',
+      detail: 'embedding 生成失败（不影响入库结果）',
+    });
+  }
 }

@@ -137,7 +137,7 @@ describe('storage ingestion', () => {
           db,
         );
 
-        db.exec('INSERT INTO chunks_fts(rowid, content) VALUES (1, "broken")');
+        db.exec('INSERT INTO chunks_fts(rowid, content_segmented) VALUES (1, "broken")');
       }),
     ).toThrowError();
 
