@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SearchError } from '../../errors/index.js';
 import { ChunkRepository, initializeStorage, KnowledgeItemRepository, TagRepository } from '../../storage/index.js';
-import { buildFtsMatchQuery, listKnowledgeItems, searchByKeyword } from './index.js';
+import { buildSimpleFtsMatchQuery, listKnowledgeItems, searchByKeyword } from './index.js';
 
 const cleanup: string[] = [];
 
@@ -320,8 +320,8 @@ describe('listKnowledgeItems', () => {
   });
 });
 
-describe('searchByKeyword 与 buildFtsMatchQuery', () => {
+describe('searchByKeyword 与 buildSimpleFtsMatchQuery', () => {
   it('单英语词生成为前缀查询', () => {
-    expect(buildFtsMatchQuery('ok')).toBe('ok*');
+    expect(buildSimpleFtsMatchQuery('ok')).toBe('ok*');
   });
 });

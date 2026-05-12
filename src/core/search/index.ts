@@ -6,8 +6,9 @@ import {
   type SearchRow,
   initializeStorage,
 } from '../../storage/index.js';
+import { getTokenizerSync, getSynonymExpander } from '../tokenizer/index.js';
 import { normalizeSearchFilters } from './filters.js';
-import { buildFtsMatchQuery } from './fts-match.js';
+import { buildFtsMatchQuery, buildSimpleFtsMatchQuery } from './fts-match.js';
 import type {
   KnowledgeListItem,
   ListKnowledgeItemsOptions,
@@ -39,7 +40,11 @@ function isSqliteMatchFailure(error: unknown): boolean {
 }
 
 /**
- * 单一入口：对知识库做 FTS5 关键词检索，返回带父级元数据的命中列表；相关度与 limit 在仓储层单条 SQL 中完成
+ * 对知识库做 FTS5 关键词检索。
+ *
+ * 策略：
+ * 1. 使用 jieba 分词 + 同义词扩展构建 AND 查询
+ * 2. 若 AND 查询零结果且 token 数 > 1，自动 fallback 到 OR 查询
  */
 export function searchByKeyword(options: SearchByKeywordOptions): SearchResult {
   const { query, limit, dbPath } = options;
@@ -47,28 +52,75 @@ export function searchByKeyword(options: SearchByKeywordOptions): SearchResult {
     throw new SearchError('limit 必须为正整数', { step: 'search', source: 'searchByKeyword' });
   }
 
-  const matchString = buildFtsMatchQuery(query);
+  const tokenizer = getTokenizerSync();
+  const synonymExpander = getSynonymExpander();
   const filters = normalizeSearchFilters(options, 'searchByKeyword');
+
+  const queryOptions = {
+    limit,
+    tag: filters.tag,
+    source: filters.source,
+    createdAfter: filters.createdAfter,
+    createdBefore: filters.createdBefore,
+  };
+
+  // 构建 AND 查询
+  const andResult = buildFtsMatchQuery({
+    raw: query,
+    tokenizer,
+    synonymExpander,
+    mode: 'and',
+  });
+
   const provider = initializeStorage({ dbPath });
   try {
     const repo = new SearchRepository(provider);
-    const rows = repo.searchByFtsQuery(matchString, {
-      limit,
-      tag: filters.tag,
-      source: filters.source,
-      createdAfter: filters.createdAfter,
-      createdBefore: filters.createdBefore,
-    });
-    const total = repo.countByFtsQuery(matchString, {
-      tag: filters.tag,
-      source: filters.source,
-      createdAfter: filters.createdAfter,
-      createdBefore: filters.createdBefore,
-    });
-    return {
-      items: rows.map(mapRowToHit),
-      total,
-    };
+
+    // 尝试 AND 查询
+    const rows = executeSearch(repo, andResult.matchExpr, queryOptions);
+    const total = executeCount(repo, andResult.matchExpr, queryOptions);
+
+    if (total > 0) {
+      return {
+        items: rows.map(mapRowToHit),
+        total,
+      };
+    }
+
+    // AND 零结果 + 多 token → OR fallback
+    if (andResult.tokens.length > 1) {
+      const orResult = buildFtsMatchQuery({
+        raw: query,
+        tokenizer,
+        synonymExpander,
+        mode: 'or',
+      });
+
+      const orRows = executeSearch(repo, orResult.matchExpr, queryOptions);
+      const orTotal = executeCount(repo, orResult.matchExpr, queryOptions);
+
+      if (orTotal > 0) {
+        return {
+          items: orRows.map(mapRowToHit),
+          total: orTotal,
+          isFallback: true,
+        };
+      }
+    }
+
+    return { items: [], total: 0 };
+  } finally {
+    provider.close();
+  }
+}
+
+function executeSearch(
+  repo: SearchRepository,
+  matchExpr: string,
+  queryOptions: { limit: number; tag?: string; source?: string; createdAfter?: string; createdBefore?: string },
+): SearchRow[] {
+  try {
+    return repo.searchByFtsQuery(matchExpr, queryOptions);
   } catch (error) {
     if (error instanceof SearchError) {
       throw error;
@@ -81,8 +133,21 @@ export function searchByKeyword(options: SearchByKeywordOptions): SearchResult {
       });
     }
     throw error;
-  } finally {
-    provider.close();
+  }
+}
+
+function executeCount(
+  repo: SearchRepository,
+  matchExpr: string,
+  queryOptions: { tag?: string; source?: string; createdAfter?: string; createdBefore?: string },
+): number {
+  try {
+    return repo.countByFtsQuery(matchExpr, queryOptions);
+  } catch (error) {
+    if (isSqliteMatchFailure(error) || isSqliteMatchFailure((error as { cause?: unknown })?.cause)) {
+      return 0;
+    }
+    throw error;
   }
 }
 
@@ -130,7 +195,8 @@ export function listKnowledgeItems(options: ListKnowledgeItemsOptions): ListKnow
   }
 }
 
-export { buildFtsMatchQuery } from './fts-match.js';
+export { buildFtsMatchQuery, buildSimpleFtsMatchQuery } from './fts-match.js';
+export type { FtsMatchOptions, FtsMatchResult } from './fts-match.js';
 export type {
   SearchByKeywordOptions,
   SearchHit,
@@ -140,3 +206,4 @@ export type {
   KnowledgeListItem,
   ListKnowledgeItemsResult,
 } from './types.js';
+export { hybridSearch, type HybridSearchOptions, type HybridSearchResult, type HybridSearchMode } from './hybrid-search.js';

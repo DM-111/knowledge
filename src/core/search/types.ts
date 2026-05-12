@@ -11,6 +11,8 @@ export interface SearchHit {
 export interface SearchResult {
   items: SearchHit[];
   total: number;
+  /** 是否为 OR fallback 结果（AND 查询零结果后降级为 OR） */
+  isFallback?: boolean;
 }
 
 export interface SearchFilterOptions {
