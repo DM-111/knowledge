@@ -50,7 +50,7 @@ describe('runInitFlow', () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all() as Array<{ name: string }>;
 
-    expect(version?.user_version).toBe(4);
+    expect(version?.user_version).toBe(8);
     expect(tables.map((table) => table.name)).toContain('knowledge_items');
     expect(tables.map((table) => table.name)).toContain('chunks');
     expect(tables.map((table) => table.name)).toContain('chunks_fts');

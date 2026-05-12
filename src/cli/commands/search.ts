@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { searchByKeyword } from '../../core/index.js';
+import { hybridSearch, type HybridSearchMode } from '../../core/search/index.js';
 import { SearchError } from '../../errors/index.js';
 import { formatSearchResult, resolveOutputMode } from '../formatters/index.js';
 import { ensureConfigForCommand } from './init.js';
@@ -13,6 +14,9 @@ export interface SearchCommandOptions extends ConfigOptionValues {
   source?: string;
   after?: string;
   before?: string;
+  mode?: string;
+  ftsWeight?: string;
+  vecWeight?: string;
 }
 
 export interface RunSearchCommandDependencies {
@@ -53,15 +57,34 @@ export async function runSearchCommand(
     source: 'search',
     fallback: 20,
   }) ?? 20;
-  const result = search({
-    query,
-    limit,
-    dbPath: config.dbPath,
-    tag: options.tag,
-    source: options.source,
-    after: options.after,
-    before: options.before,
-  });
+
+  const searchMode = (options.mode ?? 'fts') as HybridSearchMode;
+
+  let result;
+  if (searchMode === 'hybrid' || searchMode === 'vector') {
+    result = await hybridSearch({
+      query,
+      limit,
+      dbPath: config.dbPath,
+      tag: options.tag,
+      source: options.source,
+      after: options.after,
+      before: options.before,
+      mode: searchMode,
+      ftsWeight: options.ftsWeight ? parseFloat(options.ftsWeight) : undefined,
+      vecWeight: options.vecWeight ? parseFloat(options.vecWeight) : undefined,
+    });
+  } else {
+    result = search({
+      query,
+      limit,
+      dbPath: config.dbPath,
+      tag: options.tag,
+      source: options.source,
+      after: options.after,
+      before: options.before,
+    });
+  }
 
   writeOut(
     formatSearchResult(result, {
@@ -81,6 +104,9 @@ export function createSearchCommand(): Command {
       .option('--source <type>', '按来源类型过滤，例如 local-markdown')
       .option('--after <date>', '仅返回入库时间不早于该日期/时间的结果（建议 YYYY-MM-DD；完整时间戳须含时区，如 2026-04-01T00:00:00Z）')
       .option('--before <date>', '仅返回入库时间不晚于该日期/时间的结果（建议 YYYY-MM-DD；完整时间戳须含时区，如 2026-04-30T23:59:59Z）')
+      .option('--mode <mode>', '搜索模式: fts | hybrid | vector（默认 fts）', 'fts')
+      .option('--fts-weight <n>', 'FTS 权重 0-1（默认 0.3）')
+      .option('--vec-weight <n>', '向量权重 0-1（默认 0.7）')
       .description('在知识库中全文检索已入库内容')
       .action(async (...args: unknown[]) => {
         const query = args[0] as string | undefined;

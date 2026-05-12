@@ -8,6 +8,7 @@ import {
   loadConfig,
   writeUserConfig,
   type Config,
+  type ResolvedConfig,
 } from '../../config/index.js';
 import { ensureStorageReady } from '../../core/index.js';
 import { ConfigError } from '../../errors/index.js';
@@ -29,7 +30,7 @@ export interface InitFlowOptions {
 
 export interface InitFlowResult {
   saved: boolean;
-  config: Readonly<Required<Config>>;
+  config: ResolvedConfig;
   configPath: string;
 }
 
@@ -121,7 +122,7 @@ export async function runInitFlow(options: InitFlowOptions = {}): Promise<InitFl
   };
 }
 
-export async function ensureConfigForCommand(options: InitFlowOptions & { commandName: string }): Promise<Readonly<Required<Config>>> {
+export async function ensureConfigForCommand(options: InitFlowOptions & { commandName: string }): Promise<ResolvedConfig> {
   const loaded = loadConfig({
     cwd: options.cwd,
     homeDir: options.homeDir,
@@ -153,7 +154,7 @@ async function promptForConfigValues(
   initialConfig: Readonly<Config>,
   prompts: InitPromptAdapter,
   cwd: string,
-): Promise<Readonly<Required<Config>>> {
+): Promise<ResolvedConfig> {
   const knowledgeBasePathInput = await prompts.input({
     message: '请输入知识库存储路径',
     default: initialConfig.knowledgeBasePath,
@@ -190,7 +191,7 @@ async function promptForConfigValues(
   });
 }
 
-function ensureCompleteConfig(config: Readonly<Config>, source = 'init'): Readonly<Required<Config>> {
+function ensureCompleteConfig(config: Readonly<Config>, source = 'init'): ResolvedConfig {
   const missingFields = getMissingConfigFields(config);
 
   if (missingFields.length > 0) {

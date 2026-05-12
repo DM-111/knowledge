@@ -6,6 +6,12 @@ import { createSearchCommand } from './commands/search.js';
 import { createSyncCommand } from './commands/sync.js';
 import { createTagCommand } from './commands/tag.js';
 import { indexCommand } from './commands/index-cmd.js';
+import { createProgressCommand } from './commands/progress.js';
+import { createSkillCommand } from './commands/skill.js';
+import { createQuizCommand } from './commands/quiz.js';
+import { createExerciseCommand } from './commands/exercise.js';
+import { createReindexCommand } from './commands/reindex.js';
+import { createModelCommand } from './commands/model.js';
 import { renderCliError } from './formatters/index.js';
 
 export interface CreateProgramOptions {
@@ -36,6 +42,12 @@ export function createProgram(options: CreateProgramOptions = {}): Command {
   program.addCommand(createTagCommand());
   program.addCommand(createSyncCommand());
   program.addCommand(indexCommand);
+  program.addCommand(createProgressCommand());
+  program.addCommand(createSkillCommand());
+  program.addCommand(createQuizCommand());
+  program.addCommand(createExerciseCommand());
+  program.addCommand(createReindexCommand());
+  program.addCommand(createModelCommand());
 
   return program;
 }

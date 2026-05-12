@@ -4,6 +4,11 @@ import {
   searchToolSchema, searchToolName, searchToolDescription, searchToolHandler,
   listToolSchema, listToolName, listToolDescription, listToolHandler,
   ingestToolSchema, ingestToolName, ingestToolDescription, ingestToolHandler,
+  progressToolSchema, progressToolName, progressToolDescription, progressToolHandler,
+  skillGenerateToolSchema, skillGenerateToolName, skillGenerateToolDescription, skillGenerateToolHandler,
+  quizToolSchema, quizToolName, quizToolDescription, quizToolHandler,
+  exerciseToolSchema, exerciseToolName, exerciseToolDescription, exerciseToolHandler,
+  noteToolSchema, noteToolName, noteToolDescription, noteToolHandler,
 } from './tools/index.js';
 import { generateIndex } from '../core/index-generator.js';
 import { resolveDbPath } from './resolve-db.js';
@@ -51,6 +56,81 @@ server.tool(
   async (args) => {
     try {
       return await ingestToolHandler(args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: [{ type: 'text' as const, text: `错误: ${message}` }], isError: true };
+    }
+  },
+);
+
+// Register kb_progress
+server.tool(
+  progressToolName,
+  progressToolDescription,
+  progressToolSchema,
+  async (args) => {
+    try {
+      return await progressToolHandler(args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: [{ type: 'text' as const, text: `错误: ${message}` }], isError: true };
+    }
+  },
+);
+
+// Register kb_skill_generate
+server.tool(
+  skillGenerateToolName,
+  skillGenerateToolDescription,
+  skillGenerateToolSchema,
+  async (args) => {
+    try {
+      return await skillGenerateToolHandler(args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: [{ type: 'text' as const, text: `错误: ${message}` }], isError: true };
+    }
+  },
+);
+
+// Register kb_quiz
+server.tool(
+  quizToolName,
+  quizToolDescription,
+  quizToolSchema,
+  async (args) => {
+    try {
+      return await quizToolHandler(args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: [{ type: 'text' as const, text: `错误: ${message}` }], isError: true };
+    }
+  },
+);
+
+// Register kb_exercise
+server.tool(
+  exerciseToolName,
+  exerciseToolDescription,
+  exerciseToolSchema,
+  async (args) => {
+    try {
+      return await exerciseToolHandler(args);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: [{ type: 'text' as const, text: `错误: ${message}` }], isError: true };
+    }
+  },
+);
+
+// Register kb_note
+server.tool(
+  noteToolName,
+  noteToolDescription,
+  noteToolSchema,
+  async (args) => {
+    try {
+      return await noteToolHandler(args);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { content: [{ type: 'text' as const, text: `错误: ${message}` }], isError: true };
